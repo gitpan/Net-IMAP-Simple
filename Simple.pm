@@ -3,11 +3,12 @@ package Net::IMAP::Simple;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = '0.90';
+$VERSION = '0.91';
 
 
 
 use IO::Socket;
+use IO::File;
 
 
 
@@ -246,6 +247,50 @@ sub get {
 #
 #############################################################################
 
+sub getfh {
+    my ( $self, $msgn ) = @_;
+    my ( $sh, $id, $resp, $buffer, $fh );
+
+    $fh = IO::File->new_tmpfile()
+        or return;
+
+    $sh = $self->{sock};
+    $id = $self->_nextid();
+    
+    print $sh "$id FETCH $msgn rfc822\n";
+
+    while ( $resp = $sh->getline() ) {
+        if ( $resp =~ /^\*/ ) {
+            next;
+        }
+        if ( $resp =~ /^$id\s+(OK|NO|BAD)/i ) {
+            last;
+        }
+
+        print $fh $buffer if ( defined $buffer );
+        $buffer = $resp;
+    }
+
+    if ( $resp =~ /$id\s+OK/i ) {
+        seek $fh, 0, 0;
+        return $fh;
+    }
+
+    $fh->close();
+    return;
+
+}
+
+
+
+
+
+#############################################################################
+#
+#
+#
+#############################################################################
+
 sub quit {
     my ( $self ) = @_;
     my ( $sh, $id );
@@ -470,22 +515,28 @@ compatible with Net::POP3.
     use Net::IMAP::Simple;
 
     # open a connection to the IMAP server
-    $server = new Net::IMAP::Simple( $self->param( 'someserver' ) );
+    $server = new Net::IMAP::Simple( 'someserver' );
 
     # login
     $server->login( 'someuser', 'somepassword' );
     
     # select the desired folder
-    $number_of_messages = select( 'somefolder' );
+    $number_of_messages = $server->select( 'somefolder' );
 
     # go through all the messages in the selected folder
     foreach $msg ( 1..$number_of_messages ) {
 
-        # get the message
+        # get the message, returned as a reference to an array of lines
         $lines = $server->get( $msg );
 
         # print it
         print @$lines;
+
+        # get the message, returned as a temporary file handle
+        $fh = $server->getfh( $msg );
+        print <$fh>;
+        close $fh;
+
     }
 
     # the list of all folders

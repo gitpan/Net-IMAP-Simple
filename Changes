@@ -1,5 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
 
+0.91  Tue Nov  9 11:41:00 1999
+	- getfh method; fixed bugs in the documentation(!!!)
+
 0.90  Wed Nov  3 15:29:13 1999
 	- original version; created by h2xs 1.18
 
