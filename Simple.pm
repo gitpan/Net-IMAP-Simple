@@ -3,7 +3,7 @@ package Net::IMAP::Simple;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = '0.92';
+$VERSION = '0.93';
 
 
 
@@ -68,8 +68,31 @@ sub _nextid {
 sub _escape {
     my ( $str ) = @_;
 
+    $str =~ s/\\/\\\\/g;
     $str =~ s/\"/\\\"/g;
     $str = "\"$str\"";
+
+    return $str;
+
+}
+
+
+
+
+
+#############################################################################
+#
+#
+#
+#############################################################################
+
+sub _unescape {
+    my ( $str ) = @_;
+
+    $str =~ s/^"//g;
+    $str =~ s/"$//g;
+    $str =~ s/\\\"/\"/g;
+    $str =~ s/\\\\/\\/g;
 
     return $str;
 
@@ -316,6 +339,7 @@ sub getfh {
     print $sh "$id FETCH $msgn rfc822\r\n";
 
     while ( $resp = $sh->getline() ) {
+
         if ( $resp =~ /^\*/ ) {
             next;
         }
@@ -428,7 +452,12 @@ sub mailboxes {
 
     print $sh "$id LIST \"\" *\r\n";
     while ( $resp = $sh->getline() ) {
-        if ( $resp =~ /^\*\s+LIST.*\s+(\".*?\")\s*$/i ) {
+        if ( $resp =~ /^\*\s+LIST.*\s+\{\d+\}\s*$/i ) {
+            $resp = $sh->getline();
+            chomp( $resp );
+            $resp =~ s/\r$//;
+            push @list, _escape( $resp );
+        } elsif ( $resp =~ /^\*\s+LIST.*\s+(\".*?\")\s*$/i ) {
             push @list, $1;
         } elsif ( $resp =~ /^\*\s+LIST.*\s+(\S+)\s*$/i ) {
             push @list, $1;
@@ -438,9 +467,11 @@ sub mailboxes {
     }
 
     if ( $resp =~ /^$id\s+OK/i ) {
-        map { s/\\\"/\"/g } @list;
-        map { s/^\"// } @list;
-        map { s/\"$// } @list;
+        map { $_ = _unescape( $_ ) } @list;
+
+#        map { s/\\\"/\"/g } @list;
+#        map { s/^\"// } @list;
+#        map { s/\"$// } @list;
         return @list;
     }
 
@@ -551,6 +582,8 @@ sub copy {
 
     $sh = $self->{sock};
     $id = $self->_nextid();
+
+    $mbox_name = _escape( $mbox_name );
 
     print $sh "$id COPY $msgn $mbox_name\r\n";
     $resp = $sh->getline();
