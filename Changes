@@ -1,5 +1,11 @@
 Revision history for Perl extension Net::IMAP::Simple.
 
+0.95  2004-06-09
+    - Accept port configuration (Matt Bradford).
+    - Documentation overhaul (Casey West).
+    - Huge internal code overhaul (Casey West).
+    - Implemented expunge_mailbox() (Florin Andrei).
+
 0.94  Thu May 20 15:24:21 EDT 2004
     - Taken by Casey West.
     - Quoted the password argument to login() when sending
