@@ -3,7 +3,7 @@ package Net::IMAP::Simple;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = '0.91';
+$VERSION = '0.92';
 
 
 
@@ -65,6 +65,26 @@ sub _nextid {
 #
 #############################################################################
 
+sub _escape {
+    my ( $str ) = @_;
+
+    $str =~ s/\"/\\\"/g;
+    $str = "\"$str\"";
+
+    return $str;
+
+}
+
+
+
+
+
+#############################################################################
+#
+#
+#
+#############################################################################
+
 sub login {
     my ( $self, $user, $pass ) = @_;
     my ( $sh, $id, $resp );
@@ -72,7 +92,7 @@ sub login {
     $sh = $self->{sock};
     $id = $self->_nextid();
     
-    print $sh "$id LOGIN $user $pass\n";
+    print $sh "$id LOGIN $user $pass\r\n";
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -99,8 +119,10 @@ sub select {
 
     $sh = $self->{sock};
     $id = $self->_nextid();
+
+    $mbox = _escape( $mbox );
     
-    print $sh "$id SELECT $mbox\n";
+    print $sh "$id SELECT $mbox\r\n";
     while ( $resp = $sh->getline() ) {
         if ( $resp =~ /^\*\s+(\d+)\s+EXISTS/i ) {
             $nmsg = $1;
@@ -134,7 +156,7 @@ sub top {
     $sh = $self->{sock};
     $id = $self->_nextid();
     
-    print $sh "$id FETCH $msgn rfc822.header\n";
+    print $sh "$id FETCH $msgn rfc822.header\r\n";
 
     while ( $resp = $sh->getline() ) {
         if ( $resp =~ /^\*/ ) {
@@ -165,6 +187,40 @@ sub top {
 #
 #############################################################################
 
+sub seen {
+    my ( $self, $msgn ) = @_;
+    my ( $sh, $id, $resp, $lines );
+
+    $sh = $self->{sock};
+    $id = $self->_nextid();
+    
+    print $sh "$id FETCH $msgn (FLAGS)\r\n";
+
+    while ( $resp = $sh->getline() ) {
+        if ( $resp =~ /^$id\s+(OK|NO|BAD)/i ) {
+            last;
+        }
+        $lines .= $resp;
+    }
+
+    if ( $resp =~ /$id\s+OK/i ) {
+        return $lines =~ /\\Seen/i;
+    }
+
+    return;
+
+}
+
+
+
+
+
+#############################################################################
+#
+#
+#
+#############################################################################
+
 sub list {
     my ( $self, $msgn ) = @_;
     my ( $sh, $id, $resp, $hash );
@@ -173,9 +229,9 @@ sub list {
     $id = $self->_nextid();
 
     if ( defined $msgn ) {
-        print $sh "$id FETCH $msgn RFC822.SIZE\n";
+        print $sh "$id FETCH $msgn RFC822.SIZE\r\n";
     } else {
-        print $sh "$id FETCH 1:$self->{last} RFC822.SIZE\n";
+        print $sh "$id FETCH 1:$self->{last} RFC822.SIZE\r\n";
     }
 
     while ( $resp = $sh->getline() ) {
@@ -216,7 +272,7 @@ sub get {
     $sh = $self->{sock};
     $id = $self->_nextid();
     
-    print $sh "$id FETCH $msgn rfc822\n";
+    print $sh "$id FETCH $msgn rfc822\r\n";
 
     while ( $resp = $sh->getline() ) {
         if ( $resp =~ /^\*/ ) {
@@ -257,7 +313,7 @@ sub getfh {
     $sh = $self->{sock};
     $id = $self->_nextid();
     
-    print $sh "$id FETCH $msgn rfc822\n";
+    print $sh "$id FETCH $msgn rfc822\r\n";
 
     while ( $resp = $sh->getline() ) {
         if ( $resp =~ /^\*/ ) {
@@ -297,10 +353,10 @@ sub quit {
 
     $sh = $self->{sock};
     $id = $self->_nextid();
-    print $sh "$id EXPUNGE\n";
+    print $sh "$id EXPUNGE\r\n";
 
     $id = $self->_nextid();
-    print $sh "$id LOGOUT\n";
+    print $sh "$id LOGOUT\r\n";
     <$sh>;
     close $sh;
 
@@ -341,7 +397,7 @@ sub delete {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id STORE $msgn +FLAGS (\\Deleted)\n";
+    print $sh "$id STORE $msgn +FLAGS (\\Deleted)\r\n";
     while ( ( $resp = $sh->getline() ) && $resp !~ /^$id\s+(OK|NO|BAD)/i ) {
         next;
     }
@@ -370,9 +426,11 @@ sub mailboxes {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id LIST \"\" *\n";
+    print $sh "$id LIST \"\" *\r\n";
     while ( $resp = $sh->getline() ) {
-        if ( $resp =~ /^\*\s+LIST.*\s+(\S+)\s*$/i ) {
+        if ( $resp =~ /^\*\s+LIST.*\s+(\".*?\")\s*$/i ) {
+            push @list, $1;
+        } elsif ( $resp =~ /^\*\s+LIST.*\s+(\S+)\s*$/i ) {
             push @list, $1;
         } elsif ( $resp =~ /^$id\s+(OK|NO|BAD)/i ) {
             last;
@@ -380,6 +438,9 @@ sub mailboxes {
     }
 
     if ( $resp =~ /^$id\s+OK/i ) {
+        map { s/\\\"/\"/g } @list;
+        map { s/^\"// } @list;
+        map { s/\"$// } @list;
         return @list;
     }
 
@@ -403,7 +464,9 @@ sub create_mailbox {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id CREATE $mbox_name\n";
+    $mbox_name = _escape( $mbox_name );
+
+    print $sh "$id CREATE $mbox_name\r\n";
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -430,7 +493,9 @@ sub delete_mailbox {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id DELETE $mbox_name\n";
+    $mbox_name = _escape( $mbox_name );
+
+    print $sh "$id DELETE $mbox_name\r\n";
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -457,7 +522,10 @@ sub rename_mailbox {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id RENAME $mbox_name $new_name\n";
+    $mbox_name = _escape( $mbox_name );
+    $new_name = _escape( $new_name );
+
+    print $sh "$id RENAME $mbox_name $new_name\r\n";
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -484,7 +552,7 @@ sub copy {
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id COPY $msgn $mbox_name\n";
+    print $sh "$id COPY $msgn $mbox_name\r\n";
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -525,6 +593,10 @@ compatible with Net::POP3.
 
     # go through all the messages in the selected folder
     foreach $msg ( 1..$number_of_messages ) {
+
+        if ( $server->seen( $msg ) {
+            print "This message has been read before...\n"
+        }
 
         # get the message, returned as a reference to an array of lines
         $lines = $server->get( $msg );
@@ -567,8 +639,25 @@ handling.
 
 I don't know how the module reacts to nested mailboxes.
 
-This module was only tested under Netscape IMAP4rev1 Service 3.6, so
-expect some problems with servers from other vendors (then again, if
+This module was only tested under the following servers:
+
+=over 4
+
+=item *
+
+Netscape IMAP4rev1 Service 3.6
+
+=item *
+
+MS Exchange 5.5.1960.6 IMAPrev1 (Thanks to Edward Chao)
+
+=item *
+
+Cyrus IMAP Server v1.5.19 (Thanks to Edward Chao)
+
+=back
+
+Expect some problems with servers from other vendors (then again, if
 all of them are implementing the IMAP protocol, it should work - but
 we all know how it goes).
 
