@@ -1,0 +1,94 @@
+NAME
+    Net::IMAP::Simple - Perl extension for simple IMAP account handling,
+    mostly compatible with Net::POP3.
+
+SYNOPSIS
+        use Net::IMAP::Simple;
+
+        # open a connection to the IMAP server
+        $server = new Net::IMAP::Simple( 'someserver' );
+
+        # login
+        $server->login( 'someuser', 'somepassword' );
+    
+        # select the desired folder
+        $number_of_messages = $server->select( 'somefolder' );
+
+        # go through all the messages in the selected folder
+        foreach $msg ( 1..$number_of_messages ) {
+
+            if ( $server->seen( $msg ) {
+                print "This message has been read before...\n"
+            }
+
+            # get the message, returned as a reference to an array of lines
+            $lines = $server->get( $msg );
+
+            # print it
+            print @$lines;
+
+            # get the message, returned as a temporary file handle
+            $fh = $server->getfh( $msg );
+            print <$fh>;
+            close $fh;
+
+        }
+
+        # the list of all folders
+        @folders = $server->mailboxes();
+
+        # list all the folders given a path
+        @folders = $server->mailboxes("Mail/");
+    
+        # list all folders given a path and mailbox name
+        @folders = $server->mailboxes("Mail/" => "perl-*");
+
+        # create a folder
+        $server->create_mailbox( 'newfolder' );
+
+        # rename a folder
+        $server->rename_mailbox( 'newfolder', 'renamedfolder' );
+
+        # delete a folder
+        $server->delete_mailbox( 'renamedfolder' );
+
+        # copy a message to another folder
+        $server->copy( $self, $msg, 'renamedfolder' );
+
+        # close the connection
+        $server->quit();
+
+DESCRIPTION
+    This module is a simple way to access IMAP accounts. The API is mostly
+    equivalent to the Net::POP3 one, with some aditional methods for mailbox
+    handling.
+
+BUGS
+    I don't know how the module reacts to nested mailboxes.
+
+    This module was only tested under the following servers:
+
+    *   Netscape IMAP4rev1 Service 3.6
+
+    *   MS Exchange 5.5.1960.6 IMAPrev1 (Thanks to Edward Chao)
+
+    *   Cyrus IMAP Server v1.5.19 (Thanks to Edward Chao)
+
+    Expect some problems with servers from other vendors (then again, if all
+    of them are implementing the IMAP protocol, it should work - but we all
+    know how it goes).
+
+AUTHOR
+    Casey West, <casey@geeknst.com>.
+
+    Joao Fonseca, <joao_g_fonseca@yahoo.com>.
+
+SEE ALSO
+    Net::IMAP, perl.
+
+COPYRIGHT
+    Copyright (c) 2004 Casey West. Copyright (c) 1999 Joao Fonseca.
+
+    All rights reserved. This program is free software; you can redistribute
+    it and/or modify it under the same terms as Perl itself.
+

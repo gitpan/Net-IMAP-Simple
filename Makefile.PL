@@ -3,5 +3,5 @@ use ExtUtils::MakeMaker;
 # the contents of the Makefile that is written.
 WriteMakefile(
     'NAME'	=> 'Net::IMAP::Simple',
-    'VERSION_FROM' => 'Simple.pm', # finds $VERSION
+    'VERSION_FROM' => 'lib/Net/IMAP/Simple.pm', # finds $VERSION
 );

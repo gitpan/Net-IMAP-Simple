@@ -1,5 +1,14 @@
 Revision history for Perl extension Net::IMAP::Simple.
 
+0.94  Thu May 20 15:24:21 EDT 2004
+    - Taken by Casey West.
+    - Quoted the password argument to login() when sending
+      to IMAP LOGIN command.
+    - Added arguments for searching in paths and for mailboxes
+      in the mailboxes() command.
+    - Distribution clean up.
+    
+
 0.93  Thu Dec 16 16:15:00 1999
 	- LIST ... {\d}\r\nmailbox parsing in mailboxes()
         - better escaping of \" e \\

@@ -1,5 +1,7 @@
 Changes
+lib/Net/IMAP/Simple.pm
 Makefile.PL
-MANIFEST
-Simple.pm
-test.pl
+MANIFEST			This list of files
+META.yml
+README
+t/compile.t

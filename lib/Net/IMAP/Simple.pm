@@ -3,7 +3,7 @@ package Net::IMAP::Simple;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = '0.93';
+$VERSION = '0.94';
 
 
 
@@ -115,7 +115,7 @@ sub login {
     $sh = $self->{sock};
     $id = $self->_nextid();
     
-    print $sh "$id LOGIN $user $pass\r\n";
+    print $sh qq($id LOGIN $user "$pass"\r\n);
     $resp = $sh->getline();
 
     if ( $resp =~ /^$id\s+OK/i ) {
@@ -444,13 +444,16 @@ sub delete {
 #############################################################################
 
 sub mailboxes {
-    my ( $self ) = @_;
+    my ( $self, $path, $box ) = @_;
     my ( $sh, $id, $resp, @list );
+
+    $box  ||= '*';
+    $path = _escape($path || '');
 
     $sh = $self->{sock};
     $id = $self->_nextid();
 
-    print $sh "$id LIST \"\" *\r\n";
+    print $sh "$id LIST $path $box\r\n";
     while ( $resp = $sh->getline() ) {
         if ( $resp =~ /^\*\s+LIST.*\s+\{\d+\}\s*$/i ) {
             $resp = $sh->getline();
@@ -647,6 +650,12 @@ compatible with Net::POP3.
     # the list of all folders
     @folders = $server->mailboxes();
 
+    # list all the folders given a path
+    @folders = $server->mailboxes("Mail/");
+    
+    # list all folders given a path and mailbox name
+    @folders = $server->mailboxes("Mail/" => "perl-*");
+
     # create a folder
     $server->create_mailbox( 'newfolder' );
 
@@ -696,17 +705,23 @@ we all know how it goes).
 
 =head1 AUTHOR
 
-Joao Fonseca, joao_g_fonseca@yahoo.com
+Casey West, <F<casey@geeknst.com>>.
+
+Joao Fonseca, <F<joao_g_fonseca@yahoo.com>>.
 
 =head1 SEE ALSO
 
-Net::IMAP(1), Net::POP3(1).
+L<Net::IMAP>,
+L<perl>.
 
 =head1 COPYRIGHT
 
-Copyright (c) 1999 Joao Fonseca. All rights reserved.
-This program is free software; you can redistribute it
-and/or modify it under the same terms as Perl itself.
+Copyright (c) 2004 Casey West.
+Copyright (c) 1999 Joao Fonseca.
+
+All rights reserved. This program is free software; you can
+redistribute it and/or modify it under the same terms as Perl
+itself.
 
 =cut
 
