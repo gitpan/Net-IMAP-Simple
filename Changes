@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.97  2005-26-05
+    - Added patch submitted by LTHEGLER to address the multiple
+      line output problem.
+
 0.96  2005-26-05
     - Fixed synopsis to provide a functional example (Colin Faber)
     - Added error handling (Colin Faber)

@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.4 2005/04/25 12:00:00 cfaber Exp $
+# $Id: Simple.pm,v 1.5 2005/04/26 12:00:00 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.96';
+$VERSION = '0.97';
 
 =head1 NAME
 
@@ -603,7 +603,7 @@ sub _process_cmd {
     my $res;
     while ( $res = $sock->getline ) {
         my $ok = $self->_cmd_ok($res);
-        if ( $ok == 1 ) {
+	if ( defined($ok) && $ok == 1 ) {
             return $args{final}->($res);
         } elsif ( defined($ok) && ! $ok ) {
             return;
