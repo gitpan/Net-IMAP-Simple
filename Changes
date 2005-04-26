@@ -1,4 +1,10 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.96  2005-26-05
+    - Fixed synopsis to provide a functional example (Colin Faber)
+    - Added error handling (Colin Faber)
+    - Added IPv6 support (Colin Faber)
+    - Added port, timeout, use_v6, retry, retry_delay and bindaddr
+      options to the object creation method.
 
 0.95  2004-06-09
     - Accept port configuration (Matt Bradford).
