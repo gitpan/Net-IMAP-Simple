@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.98  2005-27-05
+    - Minor document changes
+    - Fixed implimentation bug with the new option set
+
 0.97  2005-26-05
     - Added patch submitted by LTHEGLER to address the multiple
       line output problem.

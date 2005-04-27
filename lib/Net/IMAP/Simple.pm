@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.5 2005/04/26 12:00:00 cfaber Exp $
+# $Id: Simple.pm,v 1.6 2005/04/27 12:00:00 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.97';
+$VERSION = '0.98';
 
 =head1 NAME
 
@@ -92,10 +92,10 @@ sub new {
 
     $self->{server} = $srv;
     $self->{port} = $prt;
-    $self->{timeout} ||= 90;
+    $self->{timeout} = ($opts{timeout} ? $opts{timeout} : $self->_timeout);
     $self->{use_v6} = ($opts{use_v6} ? 1 : 0);
-    $self->{retry} ||= 1;
-    $self->{retry_delay} ||= 5;
+    $self->{retry} = ($opts{retry} ? $opts{retry} : $self->_retry);
+    $self->{retry_delay} = ($opts{retry_delay} ? $opts{retry_delay} : $self->_retry_delay);
     $self->{bindaddr} = $opts{bindaddr};
 
     my $c;
@@ -103,6 +103,8 @@ sub new {
 	if($self->{sock} = $self->_connect){
 		$c = 1;
 		last;
+	} else {
+		select(undef, undef, undef, $self->{retry_delay});
 	}
     }
 
@@ -124,33 +126,27 @@ sub _connect {
  if($self->{use_v6}){
 	require 'IO::Socket::INET6';
 	import IO::Socket::INET6;
-
-	$sock = $self->_sock_from_v6->new(
-		PeerAddr => $self->{server},
-		PeerPort => $self->{port},
-		Timeout  => $self->{timeout},
-		Proto    => 'tcp6',
-		($self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : '')
-	);
- } else {
-	$sock = $self->_sock_from->new(
-		PeerAddr => $self->{server},
-		PeerPort => $self->{port},
-		Timeout  => $self->{timeout},
-		Proto    => 'tcp',
-		($self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : '')
-	);
  }
+
+ $sock = $self->_sock_from->new(
+	PeerAddr => $self->{server},
+	PeerPort => $self->{port},
+	Timeout  => $self->{timeout},
+	Proto    => 'tcp',
+	($self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : '')
+ );
 
  return $sock;
 }
 
-sub _port         { 143                 }
-sub _sock_from    { 'IO::Socket::INET'  }
-sub _sock_from_v6 { 'IO::Socket::INET6' }
-sub _sock         { $_[0]->{sock}       }
-sub _count        { $_[0]->{count}      }
-sub _last         { $_[0]->{last}       }
+sub _port        { 143            }
+sub _sock        { $_[0]->{sock}  }
+sub _count       { $_[0]->{count} }
+sub _last        { $_[0]->{last}  }
+sub _timeout     { 90             }
+sub _retry       { 1              }
+sub _retry_delay { 5              }
+sub _sock_from   { $_[0]->{use_v6} ? 'IO::Socket::INET6' : 'IO::Socket::INET' }
 
 =pod
 
@@ -549,6 +545,8 @@ sub copy {
 
 =item errstr
 
+ print "Login ERROR: " . $imap->errstr . "\n" if($imap->login($user, $pass) !~ /^\d+$/);
+
 Return the last error string captured for the last operation which failed.
 
 =cut
@@ -584,8 +582,10 @@ sub _send_cmd {
 sub _cmd_ok {
     my ($self, $res) = @_;
     my $id = $self->_count;
-    return 1 if $res =~ /^$id\s+OK/i;
-    if($res =~ /^$id\s+(?:NO|BAD)(?:\s+(.+))?/i){
+
+    if($res =~ /^$id\s+OK/i){
+	return 1;
+    } elsif($res =~ /^$id\s+(?:NO|BAD)(?:\s+(.+))?/i){
 	$self->_seterrstr($1 || 'unknown error');
 	return 0;
     } else {
