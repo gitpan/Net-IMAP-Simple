@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.6 2005/04/27 12:00:00 cfaber Exp $
+# $Id: Simple.pm,v 1.7 2005/04/28 12:00:00 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.98';
+$VERSION = '0.99';
 
 =head1 NAME
 
@@ -214,7 +214,7 @@ sub top {
     $self->_process_cmd(
         cmd     => [FETCH => qq[$number rfc822.header]],
         final   => sub { \@lines },
-        process => sub { push @lines, $_[0] if $_[0] =~ /^[^:]+:/ },
+        process => sub { push @lines, $_[0] if $_[0] =~ /^(?: \s+\S+ | [^:]+: )/x },
     );
 }
 

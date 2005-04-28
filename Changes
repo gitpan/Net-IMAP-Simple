@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.99  2005-28-05
+    - Added multi-line header patch for bug discovered in top(),
+      thanks Sergey Mudrik for pointing this out.
+
 0.98  2005-27-05
     - Minor document changes
     - Fixed implimentation bug with the new option set
