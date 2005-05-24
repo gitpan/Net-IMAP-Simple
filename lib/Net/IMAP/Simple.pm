@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.7 2005/04/28 12:00:00 cfaber Exp $
+# $Id: Simple.pm,v 1.7 Mon May 23 19:33:34 MDT 2005 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.99';
+$VERSION = '0.100';
 
 =head1 NAME
 
@@ -22,9 +22,7 @@ Net::IMAP::Simple - Perl extension for simple IMAP account handling.
        die "Unable to connect to IMAP: $Net::IMAP::Simple::errstr\n";
 
     # Log on
-    my $msgs = $imap->login('user','pass');
-
-    if($msgs !~ /^\d+$/){
+    if(!$imap->login('user','pass')){
         print STDERR "Login failed: " . $imap->errstr . "\n";
         exit(64);
     }
@@ -155,21 +153,20 @@ sub _sock_from   { $_[0]->{use_v6} ? 'IO::Socket::INET6' : 'IO::Socket::INET' }
   my $inbox_msgs = $imap->login($user, $passwd);
 
 This method takes two required parameters, a username and password. This pair
-is authenticated against the server. If authentication is successful the
-user's INBOX is selected.
+is authenticated against the server. If authentication is successful TRUE (1) will be returned
 
-On success, an integer which represents the number of messages in the INBOX is returned. Nothing is returned on failure and the errstr() error handler is set with the error message.
+Nothing is returned on failure and the errstr() error handler is set with the error message.
 
 =cut
 
 sub login {
-    my ( $self, $user, $pass ) = @_;
+ my ( $self, $user, $pass ) = @_;
 
-    $self->_process_cmd(
-        cmd     => [LOGIN => qq[$user "$pass"]],
-        final   => sub { $self->select('INBOX') },
-        process => sub { },
-    );
+ return $self->_process_cmd (
+	cmd     => [LOGIN => qq[$user "$pass"]],
+	final   => sub { },
+	process => sub { },
+ );
 }
 
 =pod
@@ -183,14 +180,54 @@ Selects a folder named in the single required parameter. The number of messages 
 =cut
 
 sub select {
-    my ( $self, $mbox ) = @_;
+ my ( $self, $mbox ) = @_;
 
-    my $messages;
-    $self->_process_cmd(
-        cmd     => [SELECT => _escape($mbox)],
-        final   => sub { $self->{last} = $messages },
-        process => sub { if ($_[0] =~ /^\*\s+(\d+)\s+EXISTS/i) { $messages = $1 } },
-    );
+ $self->{working_box} = $mbox;
+
+ $self->_process_cmd(
+	cmd     => [SELECT => _escape($mbox)],
+	final   => sub { $self->{last} = $self->{BOXES}->{$mbox}->{messages} },
+	process => sub {
+		if($_[0] =~ /^\*\s+(\d+)\s+EXISTS/i){
+			$self->{BOXES}->{$mbox}->{messages} = $1;
+		} elsif($_[0] =~ /^\*\s+FLAGS\s+\((.*?)\)/i){
+			$self->{BOXES}->{$mbox}->{flags} = [ split(/\s+/, $1) ];
+		} elsif($_[0] =~ /^\*\s+(\d+)\s+RECENT/i){
+			$self->{BOXES}->{$mbox}->{recent} = $1;
+		} elsif($_[0] =~ /^\*\s+OK\s+\[(.*?)\s+(.*?)\]/i){
+			my ($flag, $value) = ($1, $2);
+			if($value =~ /\((.*?)\)/){
+				$self->{BOXES}->{$mbox}->{sflags}->{$flag} = [split(/\s+/, $1)];
+			} else {
+				$self->{BOXES}->{$mbox}->{oflags}->{$flag} = $value;
+			}
+		}
+	},
+ );
+
+ return $self->{last}
+}
+
+sub _messages {
+ my ($self) = @_;
+ return $self->{BOXES}->{ $self->{working_box} }->{messages};
+}
+
+=pod
+
+=item messages(Folder)
+
+    print "Messages in $Folder -- " . $imap->messages($Folder) . "\n";
+
+This method accepts an optional Folder name and returns the current number
+of messages found within it. If no folder name is provided the last folder
+$imap->select()'ed will be used.
+
+=cut
+
+sub messages {
+ my ($self, $folder) = @_;
+ return $self->select($folder ? $folder : "INBOX");
 }
 
 =pod
@@ -326,19 +363,30 @@ sub getfh {
 
 =item quit
 
-  $item->quit;
+  $imap->quit;
+
+  OR
+
+  $imap->quit(BOOL);
 
 This method logs out of the IMAP server, expunges the selected mailbox,
 and closes the connection. No error message will ever be returned from this method.
 
+Optionally if BOOL is TRUE (1) then a hard quit is preformed which closes the socket connection. This hard quit will still issue both EXPUNGE and LOGOUT commands however the response is ignored and the socket is closed after issuing the commands.
+
 =cut
 
 sub quit {
-    my ( $self ) = @_;
-    $self->_send_cmd('EXPUNGE');
-    $self->_send_cmd('LOGOUT');
-    $self->_sock->close;
-    return 1;
+ my ( $self, $hq ) = @_;
+ $self->_send_cmd('EXPUNGE');
+ if(!$hq){   
+	$self->_process_cmd(cmd => ['LOGOUT'], final => sub {}, process => sub{});
+ } else {
+	$self->_send_cmd('LOGOUT');
+ }
+
+ $self->_sock->close;
+ return 1;
 }    
 
 =pod
@@ -574,7 +622,7 @@ sub _send_cmd {
     my ( $self, $name, $value ) = @_;
     my $sock = $self->_sock;
     my $id   = $self->_nextid;
-    my $cmd  = qq[$id $name $value\r\n];
+    my $cmd  = "$id $name" . ($value ? " $value" : "") . "\r\n";
     { local $\; print $sock $cmd; }
     return ($sock => $id);
 }
@@ -608,7 +656,7 @@ sub _process_cmd {
         } elsif ( defined($ok) && ! $ok ) {
             return;
         } else {
-            $args{process}->($res);
+		$args{process}->($res);
         }
     }
 }

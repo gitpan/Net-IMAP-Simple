@@ -1,17 +1,29 @@
 Revision history for Perl extension Net::IMAP::Simple.
-0.99  2005-28-05
+0.100 2005-14-05
+    - Fixed dates in Changes file
+    - Fixed IMAP protocol error identified by John A. Murphy
+    - Changed behavior of login() to only return true or false.
+      This change means that to get the current number of messages
+      in a users INBOX folder you will need to preform a simple
+      $imap->select("INBOX") after successfully logging in.
+    - Added messages() function
+    - Added the frame work within select() to provide more detailed
+      information about the current IMAP framework
+
+0.99  2005-28-04
     - Added multi-line header patch for bug discovered in top(),
       thanks Sergey Mudrik for pointing this out.
 
-0.98  2005-27-05
+0.98  2005-27-04
     - Minor document changes
     - Fixed implimentation bug with the new option set
 
-0.97  2005-26-05
+0.97  2005-26-04
     - Added patch submitted by LTHEGLER to address the multiple
       line output problem.
 
-0.96  2005-26-05
+0.96  2005-26-04
+    - Took over module development (Colin Faber)
     - Fixed synopsis to provide a functional example (Colin Faber)
     - Added error handling (Colin Faber)
     - Added IPv6 support (Colin Faber)
