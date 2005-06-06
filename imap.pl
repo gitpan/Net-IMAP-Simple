@@ -4,7 +4,7 @@ print "IMAP Server[:port]: ";
 
 while(<>){
 	chomp;
-	$imap = Net::IMAP::Simple->new($_) || die "$Net::IMAP::Simple::errstr\n";
+	$imap = Net::IMAP::Simple->new($_, port => 143, timeout => 90) || die "$Net::IMAP::Simple::errstr\n";
 	if($imap){
 		print "Connected.\n";
 		last;

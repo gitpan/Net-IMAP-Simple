@@ -1,4 +1,7 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.101 2005-01-06
+    - Fixed bug which resulted in inconsistant results from login()
+
 0.100 2005-14-05
     - Fixed dates in Changes file
     - Fixed IMAP protocol error identified by John A. Murphy

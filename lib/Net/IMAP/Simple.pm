@@ -5,7 +5,7 @@ use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.100';
+$VERSION = '0.101';
 
 =head1 NAME
 
@@ -164,7 +164,7 @@ sub login {
 
  return $self->_process_cmd (
 	cmd     => [LOGIN => qq[$user "$pass"]],
-	final   => sub { },
+	final   => sub { 1 },
 	process => sub { },
  );
 }
