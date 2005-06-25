@@ -1,4 +1,14 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.102 2005-06-25
+    - Fixed protocol error identified within the expunge_mailbox()
+      function. (Thanks alot to William Faulk for pointing this out)
+    - Fixed bugs in the sample imap.pl script provided.
+    - Added flags() and recent() routines
+    - Added current_box() function
+    - Added use_select_cache and select_cache_ttl options. These
+      options will allow you to enable internal caching for
+      select() operations.
+
 0.101 2005-01-06
     - Fixed bug which resulted in inconsistant results from login()
 

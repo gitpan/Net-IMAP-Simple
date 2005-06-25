@@ -1,9 +1,10 @@
-use Net::IMAP::Simple;
+require 'lib/Net/IMAP/Simple.pm';
 print "Square brackets: [] indicate optional arguments\n\n";
-print "IMAP Server[:port]: ";
+print "IMAP Server[:port] [localhost]: ";
 
 while(<>){
 	chomp;
+	$_ ||= 'localhost';
 	$imap = Net::IMAP::Simple->new($_, port => 143, timeout => 90) || die "$Net::IMAP::Simple::errstr\n";
 	if($imap){
 		print "Connected.\n";
@@ -30,7 +31,7 @@ print "Password: ";
 system("stty -echo");
 while(<>){
 	chomp;
-	if($imap->login($user, $_)){
+	if(!$imap->login($user, $_)){
 		print "Login failed: " . $imap->errstr . "\n";
 	} else {
 		my $msgs = $imap->select("INBOX");
@@ -46,5 +47,9 @@ for($imap->mailboxes){
 	s/\./ -> /g;
 	print "BOX: $_\n";
 }
+
+print "Recent: " . $imap->recent . "\n";
+print " Flags: " . $imap->flags . "\n";
+print "Flag List: " . join(" ", $imap->flags) . "\n";
 
 $imap->quit;

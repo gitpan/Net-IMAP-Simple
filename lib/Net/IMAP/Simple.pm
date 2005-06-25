@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.7 Mon May 23 19:33:34 MDT 2005 cfaber Exp $
+# $Id: Simple.pm,v 1.8 2005/06/25 08:37:01 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.101';
+$VERSION = '0.102';
 
 =head1 NAME
 
@@ -48,18 +48,14 @@ Net::IMAP::Simple - Perl extension for simple IMAP account handling.
 
 This module is a simple way to access IMAP accounts.
 
-=head2 Methods
+=head1 OBJECT CREATION METHOD
 
 =over 4
 
 =item new
 
+ my $imap = Net::IMAP::Simple->new( $server [ :port ]); OR  my $imap = Net::IMAP::Simple->new( $server [, option_name => option_value ] );
 
-my $imap = Net::IMAP::Simple->new( $server [ :port ] ) 
-
- OR 
-
-my $imap = Net::IMAP::Simple->new( $server [, option_name => option_value ] );
 
 This class method constructs a new C<Net::IMAP::Simple> object. It takes one required parameter which is the server to connect to, and additional optional parameters.
 
@@ -67,14 +63,35 @@ The server parameter may specify just the server, or both the server and port nu
 
 On success an object is returned. On failure, nothing is returned and an error message is set to $Net::IMAP::Simple.
 
-Options:
+B<OPTIONS:>
 
- port        => some port other than 143
- timeout     => connection timeout after (x) seconds
- retry       => try and reconnect (x) times
- retry_delay => wait (x) seconds before retrying
- use_v6      => 1|0 -- Use IPv6 sockets rather than IPv4
- bindaddr    => some local address to bind
+
+ port		=> Assign the port number (default: 143)
+
+ timeout	=> Connection timeout in seconds.
+
+ retry		=> Attempt to retry the connection 
+		-> attmpt (x) times before giving up
+
+
+ retry_delay	=> Wait (x) seconds before retrying a
+		-> connection attempt
+
+
+ use_v6		=> If set to true, attempt to use IPv6
+		-> sockets rather than IPv4 sockets.
+		-> This option requires the
+		-> IO::Socket::INET6 module
+
+
+ bindaddr	=> Assign a local address to bind
+
+
+ use_select_cache => Enable select() caching internally
+
+ select_cache_ttl => The number of seconds to allow a
+		  -> select cache result live before running
+		  ->select() again.
 
 =cut
 
@@ -148,6 +165,8 @@ sub _sock_from   { $_[0]->{use_v6} ? 'IO::Socket::INET6' : 'IO::Socket::INET' }
 
 =pod
 
+=head1 METHODS
+
 =item login
 
   my $inbox_msgs = $imap->login($user, $passwd);
@@ -182,10 +201,22 @@ Selects a folder named in the single required parameter. The number of messages 
 sub select {
  my ( $self, $mbox ) = @_;
 
- $self->{working_box} = $mbox;
+ $self->{working_box} = $mbox if $mbox;
+
+ $mbox = 'INBOX';
+
+ $self->{working_box} ||= $mbox;
+
+ if($self->{use_select_cache} && (time - $self->{BOXES}->{ $mbox }->{proc_time}) <= $self->{select_cache_ttl}){
+	return $self->{BOXES}->{$mbox}->{messages};
+ }
+
+ $self->{BOXES}->{$mbox}->{proc_time} = time;
+
+ my $t_mbox = $mbox;
 
  $self->_process_cmd(
-	cmd     => [SELECT => _escape($mbox)],
+	cmd     => [SELECT => _escape($t_mbox)],
 	final   => sub { $self->{last} = $self->{BOXES}->{$mbox}->{messages} },
 	process => sub {
 		if($_[0] =~ /^\*\s+(\d+)\s+EXISTS/i){
@@ -208,26 +239,74 @@ sub select {
  return $self->{last}
 }
 
-sub _messages {
- my ($self) = @_;
- return $self->{BOXES}->{ $self->{working_box} }->{messages};
-}
-
 =pod
 
-=item messages(Folder)
+=item messages
 
-    print "Messages in $Folder -- " . $imap->messages($Folder) . "\n";
+    print "Messages in Junk Mail -- " . $imap->messages("INBOX.Junk Mail") . "\n";
 
-This method accepts an optional Folder name and returns the current number
-of messages found within it. If no folder name is provided the last folder
-$imap->select()'ed will be used.
+This method is an alias for $imap->select
 
 =cut
 
 sub messages {
  my ($self, $folder) = @_;
- return $self->select($folder ? $folder : "INBOX");
+ return $self->select($folder);
+}
+
+=pod
+
+=item flags
+
+    print "Avaliable server flags: " . join(", ", $imap->flags) . "\n";
+
+This method accepts an optional folder name and returns the current avaliable server flags as a list, for the selected folder. If no folder name is provided the last folder $imap->select'ed will be used.
+
+This method uses caching.
+
+=cut
+
+sub flags {
+ my ($self, $folder) = @_;
+
+ $self->select($folder);
+ return @{ $self->{BOXES}->{ $self->current_box }->{flags} };
+}
+
+
+=pod
+
+=item recent
+
+    print "Recent messages value: " . $imap->recent . "\n";
+
+This method accepts an optional folder name and returns the 'RECENT' value provided durning a SELECT result set. If no folder name is provided the last folder $imap->select'ed will be used.
+
+This method uses caching.
+
+=cut
+
+sub recent {
+ my ($self, $folder) = @_;
+
+ $self->select($folder);
+ return $self->{BOXES}->{ $self->current_box }->{recent};
+}
+
+
+=pod
+
+=item current_box
+
+   print "Current Mail Box folder: " . $imap->current_box . "\n";
+
+This method returns the current working mail box folder name.
+
+=cut
+
+sub current_box {
+ my ($self) = @_;
+ return ($self->{working_box} ? $self->{working_box} : 'INBOX');
 }
 
 =pod
@@ -379,6 +458,7 @@ Optionally if BOOL is TRUE (1) then a hard quit is preformed which closes the so
 sub quit {
  my ( $self, $hq ) = @_;
  $self->_send_cmd('EXPUNGE');
+
  if(!$hq){   
 	$self->_process_cmd(cmd => ['LOGOUT'], final => sub {}, process => sub{});
  } else {
@@ -512,14 +592,14 @@ the required argument. Returns true on success, false on failure and the errstr(
 =cut
 
 sub expunge_mailbox {
-    my ( $self, $box ) = @_;
-    _escape( $box );
-    
-    return $self->_process_cmd(
-        cmd     => [EXPUNGE => $box],
-        final   => sub { 1 },
-        process => sub { },
-    );
+ my ($self, $box) = @_;
+ $self->select($box);
+
+ return $self->_process_cmd(
+	cmd     => ['EXPUNGE'],
+	final   => sub { 1 },
+	process => sub { },
+ );
 }
 
 =pod
@@ -591,9 +671,11 @@ sub copy {
     );
 }
 
+=pod
+
 =item errstr
 
- print "Login ERROR: " . $imap->errstr . "\n" if($imap->login($user, $pass) !~ /^\d+$/);
+ print "Login ERROR: " . $imap->errstr . "\n" if !$imap->login($user, $pass);
 
 Return the last error string captured for the last operation which failed.
 
