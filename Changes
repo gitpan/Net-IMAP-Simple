@@ -1,4 +1,10 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.103 2005-07-10
+    - Fixed error in select() identified by Guido Kerkewitz and
+      Jonathan B. Glatt
+    - Added folder_subscribe() and folder_unsubscribe() functions
+      provided by Guido Kerkewitz.
+
 0.102 2005-06-25
     - Fixed protocol error identified within the expunge_mailbox()
       function. (Thanks alot to William Faulk for pointing this out)

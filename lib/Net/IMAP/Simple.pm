@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.8 2005/06/25 08:37:01 cfaber Exp $
+# $Id: Simple.pm,v 1.10 2005/07/11 00:14:50 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.102';
+$VERSION = '0.103';
 
 =head1 NAME
 
@@ -201,11 +201,9 @@ Selects a folder named in the single required parameter. The number of messages 
 sub select {
  my ( $self, $mbox ) = @_;
 
- $self->{working_box} = $mbox if $mbox;
+ $mbox = 'INBOX' unless $mbox;
 
- $mbox = 'INBOX';
-
- $self->{working_box} ||= $mbox;
+ $self->{working_box} = $mbox;
 
  if($self->{use_select_cache} && (time - $self->{BOXES}->{ $mbox }->{proc_time}) <= $self->{select_cache_ttl}){
 	return $self->{BOXES}->{$mbox}->{messages};
@@ -646,6 +644,50 @@ sub rename_mailbox {
         final   => sub { 1 },
         process => sub { },
     );
+}
+
+=pod
+
+=item folder_subscribe
+
+  print "Subscribed" if $imap->folder_subscribe( "/Mail/lists/perl/advocacy" );
+
+This method subscribes to the folder. Returns true on success, false on failure
+and the errstr() error handler is set with the error message.
+
+=cut
+
+sub folder_subscribe {
+ my ($self, $box) = @_;
+ $self->select($box);
+
+ return $self->_process_cmd(
+        cmd     => [SUBSCRIBE => $box],
+        final   => sub { 1 },
+        process => sub { },
+ );
+}
+
+=pod
+
+=item folder_unsubscribe
+
+  print "Unsubscribed" if $imap->folder_unsubscribe( "/Mail/lists/perl/advocacy" );
+
+This method unsubscribes to the folder. Returns true on success, false on failure
+and the errstr() error handler is set with the error message.
+
+=cut
+
+sub folder_unsubscribe {
+ my ($self, $box) = @_;
+ $self->select($box);
+
+ return $self->_process_cmd(
+        cmd     => [UNSUBSCRIBE => $box],
+        final   => sub { 1 },
+        process => sub { },
+ );
 }
 
 =pod
