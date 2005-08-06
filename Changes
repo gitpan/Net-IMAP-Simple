@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.104 2005-08-06
+    - Fixed major bug discovered in get() and getfh() which caused
+      message lines to be dropped if they started with an "*"
+
 0.103 2005-07-10
     - Fixed error in select() identified by Guido Kerkewitz and
       Jonathan B. Glatt
