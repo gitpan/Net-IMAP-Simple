@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+0.105 2005-09-28
+    - Fixed syntax problem in the bindaddr option. Thanks
+      Dagobert Michelsen for pointing this out.
+
 0.104 2005-08-06
     - Fixed major bug discovered in get() and getfh() which caused
       message lines to be dropped if they started with an "*"

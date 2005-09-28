@@ -1,11 +1,11 @@
 package Net::IMAP::Simple;
-# $Id: Simple.pm,v 1.11 2005/08/06 10:38:04 cfaber Exp $
+# $Id: Simple.pm,v 1.12 2005/09/28 05:32:25 cfaber Exp $
 use strict;
 use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = '0.104';
+$VERSION = '0.105';
 
 =head1 NAME
 
@@ -148,7 +148,7 @@ sub _connect {
 	PeerPort => $self->{port},
 	Timeout  => $self->{timeout},
 	Proto    => 'tcp',
-	($self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : '')
+	($self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : ())
  );
 
  return $sock;
