@@ -1,4 +1,9 @@
 Revision history for Perl extension Net::IMAP::Simple.
+1.13  2005-09-28
+    - Versioning schema changed to use CVS versioning rather than
+      hard coded versioning. This is to address issues some people
+      are having with bug tracking and package management tools.
+
 0.105 2005-09-28
     - Fixed syntax problem in the bindaddr option. Thanks
       Dagobert Michelsen for pointing this out.
