@@ -4,7 +4,7 @@ use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = $1 if('$Id: Simple.pm,v 1.13 2005/09/28 05:42:05 cfaber Exp $' =~ /,v ([\d.]+) /);
+$VERSION = $1 if('$Id: Simple.pm,v 1.14 2005/10/01 22:46:50 cfaber Exp $' =~ /,v ([\d.]+) /);
 
 =head1 NAME
 
@@ -29,7 +29,7 @@ Net::IMAP::Simple - Perl extension for simple IMAP account handling.
     # Print the subject's of all the messages in the INBOX
     my $nm = $imap->select('INBOX');
 
-    for(my $i = 1; $i < $nm; $i++){
+    for(my $i = 1; $i <= $nm; $i++){
         if($imap->seen($i)){
             print "*";
         } else {

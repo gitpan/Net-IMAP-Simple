@@ -1,4 +1,8 @@
 Revision history for Perl extension Net::IMAP::Simple.
+1.14  2005-10-01
+    - Fixed error in sample code within the POD documentation
+      identified by Matthew S. Hallacy
+
 1.13  2005-09-28
     - Versioning schema changed to use CVS versioning rather than
       hard coded versioning. This is to address issues some people
