@@ -4,7 +4,7 @@ use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = $1 if('$Id: Simple.pm,v 1.14 2005/10/01 22:46:50 cfaber Exp $' =~ /,v ([\d.]+) /);
+$VERSION = $1 if('$Id: Simple.pm,v 1.16 2006/06/13 15:47:00 cfaber Exp $' =~ /,v ([\d.]+) /);
 
 =head1 NAME
 
@@ -111,13 +111,20 @@ sub new {
     $self->{retry} = ($opts{retry} ? $opts{retry} : $self->_retry);
     $self->{retry_delay} = ($opts{retry_delay} ? $opts{retry_delay} : $self->_retry_delay);
     $self->{bindaddr} = $opts{bindaddr};
+    $self->{use_select_cache} = $opts{use_select_cache};
+    $self->{select_cache_ttl} = $opts{select_cache_ttl};
 
+    # Pop the port off the address string if it's not an IPv6 IP address
+    if(!$self->{use_v6} && $self->{server} =~ /^[A-Fa-f0-9]{4}:[A-Fa-f0-9]{4}:/ && $self->{server} =~ s/:(\d+)$//g){
+        $self->{port} = $1;
+    }
+   
     my $c;
-    for(my $i = 0; $i < $self->{retry}; $i++){
+    for(my $i = 0; $i <= $self->{retry}; $i++){
 	if($self->{sock} = $self->_connect){
 		$c = 1;
 		last;
-	} else {
+	} elsif ($i < $self->{retry}) {
 		select(undef, undef, undef, $self->{retry_delay});
 	}
     }
@@ -510,14 +517,14 @@ sub delete {
 sub _process_list {
     my ($self, $line) = @_;
     my @list;
-    if ( $line =~ /^\*\s+LIST.*\s+\{\d+\}\s*$/i ) {
+    if ( $line =~ /^\*\s+(LIST|LSUB).*\s+\{\d+\}\s*$/i ) {
         chomp( my $res = $self->_sock->getline );
         $res =~ s/\r//;
         _escape($res);
         push @list, $res;
-    } elsif ( $line =~ /^\*\s+LIST.*\s+(\".*?\")\s*$/i ||
-              $line =~ /^\*\s+LIST.*\s+(\S+)\s*$/i ) {
-        push @list, $1;
+    } elsif ( $line =~ /^\*\s+(LIST|LSUB).*\s+(\".*?\")\s*$/i ||
+              $line =~ /^\*\s+(LIST|LSUB).*\s+(\S+)\s*$/i ) {
+        push @list, $2;
     }
     @list;
 }
@@ -563,6 +570,45 @@ sub mailboxes {
 
 =pod
 
+=item mailboxes_subscribed
+
+  my @boxes   = $imap->mailboxes_subscribed;
+  my @folders = $imap->mailboxes_subscribed("Mail/%");
+  my @lists   = $imap->mailboxes_subscribed("lists/perl/*", "/Mail/");
+
+This method returns a list of mailboxes subscribed to. When called with no
+arguments it recurses from the IMAP root to get all mailboxes. The first optional
+argument is a mailbox path and the second is the path reference. RFC 3501
+has more information.
+
+On failure nothing is returned and the errstr() error handler is set with the error message.
+
+=cut
+
+sub mailboxes_subscribed {
+    my ( $self, $box, $ref ) = @_;
+    
+    $ref ||= '""';
+    my @list;
+    if ( ! defined $box ) {
+        # recurse, should probably follow
+        # RFC 2683: 3.2.2.  Subscriptions
+        return $self->_process_cmd(
+            cmd     => [LSUB => qq[$ref *]],
+            final   => sub { _unescape($_) for @list; @list },
+            process => sub { push @list, $self->_process_list($_[0]) },
+        );
+    } else {
+        return $self->_process_cmd(
+            cmd     => [LSUB => qq[$ref $box]],
+            final   => sub { _unescape($_) for @list; @list },
+            process => sub { push @list, $self->_process_list($_[0]) },
+        );
+    }
+}
+
+=pod
+
 =item create_mailbox
 
   print "Created" if $imap->create_mailbox( "/Mail/lists/perl/advocacy" );
@@ -596,7 +642,7 @@ the required argument. Returns true on success, false on failure and the errstr(
 
 sub expunge_mailbox {
  my ($self, $box) = @_;
- $self->select($box);
+ return if !$self->select($box);
 
  return $self->_process_cmd(
 	cmd     => ['EXPUNGE'],
@@ -664,8 +710,9 @@ and the errstr() error handler is set with the error message.
 
 sub folder_subscribe {
  my ($self, $box) = @_;
- $self->select($box);
-
+ $self->select($box); # XXX does it matter if this fails?
+ _escape($box);
+ 
  return $self->_process_cmd(
         cmd     => [SUBSCRIBE => $box],
         final   => sub { 1 },
@@ -687,7 +734,8 @@ and the errstr() error handler is set with the error message.
 sub folder_unsubscribe {
  my ($self, $box) = @_;
  $self->select($box);
-
+ _escape($box);
+ 
  return $self->_process_cmd(
         cmd     => [UNSUBSCRIBE => $box],
         final   => sub { 1 },
@@ -769,8 +817,18 @@ sub _cmd_ok {
 	$self->_seterrstr("unknown return string: $res");
 	return;
     }
+}
 
-    return;
+sub _read_multiline {
+  my ($self, $sock, $count) = @_;
+  
+  my @lines;
+  my $read_so_far = 0;
+  while ($read_so_far < $count) {
+    push @lines, $sock->getline;
+    $read_so_far += length($lines[-1]);
+  }
+  return @lines;
 }
 
 sub _process_cmd {
@@ -779,13 +837,18 @@ sub _process_cmd {
 
     my $res;
     while ( $res = $sock->getline ) {
-        my $ok = $self->_cmd_ok($res);
-	if ( defined($ok) && $ok == 1 ) {
-            return $args{final}->($res);
-        } elsif ( defined($ok) && ! $ok ) {
-            return;
+        if ( $res =~ /^\*.*\{(\d+)\}$/ ) {
+            $args{process}->($res);
+            $args{process}->($_) foreach $self->_read_multiline($sock, $1);
         } else {
+            my $ok = $self->_cmd_ok($res);
+   	    if ( defined($ok) && $ok == 1 ) {
+                return $args{final}->($res);
+            } elsif ( defined($ok) && ! $ok ) {
+                return;
+            } else {
 		$args{process}->($res);
+            }
         }
     }
 }
