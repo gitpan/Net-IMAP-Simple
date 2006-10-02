@@ -1,4 +1,11 @@
 Revision history for Perl extension Net::IMAP::Simple.
+1.16_1 2006-10-02
+      - Beta Release
+      - Added debugging
+      - Upgraded imap.pl example script
+      - Updated documentation
+      - Added a few patches here and there
+
 1.16  2006-06-13
     - Multiple bugs identified by nate@cs.wisc.edu. Patch provided by Nate.
       Nate also provided new release tests - thanks man.

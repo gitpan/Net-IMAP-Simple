@@ -4,7 +4,7 @@ use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = $1 if('$Id: Simple.pm,v 1.16 2006/06/13 15:47:00 cfaber Exp $' =~ /,v ([\d.]+) /);
+$VERSION = $1 if('$Id: Simple.pm,v 1.16_1 2006/10/02 11:16:37 cfaber Exp $' =~ /,v ([\d_.]+) /);
 
 =head1 NAME
 
@@ -62,35 +62,47 @@ The server parameter may specify just the server, or both the server and port nu
 
 On success an object is returned. On failure, nothing is returned and an error message is set to $Net::IMAP::Simple.
 
-B<OPTIONS:>
+=head2 OPTIONS:
 
+Options are provided as a hash to new()
 
- port		=> Assign the port number (default: 143)
+=item port => int
 
- timeout	=> Connection timeout in seconds.
+Assign the port number (default: 143)
 
- retry		=> Attempt to retry the connection 
-		-> attmpt (x) times before giving up
+=item timeout => int (default: 90)
 
+Connection timeout in seconds.
 
- retry_delay	=> Wait (x) seconds before retrying a
-		-> connection attempt
+=item retry => int (default: 1)
 
+Attempt to retry the connection attmpt (x) times before giving up
 
- use_v6		=> If set to true, attempt to use IPv6
-		-> sockets rather than IPv4 sockets.
-		-> This option requires the
-		-> IO::Socket::INET6 module
+=item retry_delay => int (default: 5)
 
+Wait (x) seconds before retrying a connection attempt
 
- bindaddr	=> Assign a local address to bind
+=item use_v6 => BOOL
 
+If set to true, attempt to use IPv6 sockets rather than IPv4 sockets.
 
- use_select_cache => Enable select() caching internally
+This option requires the IO::Socket::INET6 module
 
- select_cache_ttl => The number of seconds to allow a
-		  -> select cache result live before running
-		  ->select() again.
+=item bindaddr => str
+
+Assign a local address to bind
+
+=item use_select_cache => BOOL
+
+Enable select() caching internally
+
+=item select_cache_ttl => int
+
+The number of seconds to allow a select cache result live before running $imap->select() again.
+
+=item debug => BOOL | \*HANDLE
+
+Enable debugging output. If \*HANDLE is a valid file handle, debugging will be written to it. Otherwise debugging will be written to STDOUT
 
 =cut
 
@@ -113,6 +125,8 @@ sub new {
     $self->{bindaddr} = $opts{bindaddr};
     $self->{use_select_cache} = $opts{use_select_cache};
     $self->{select_cache_ttl} = $opts{select_cache_ttl};
+    $self->{debug} = $opts{debug};
+    
 
     # Pop the port off the address string if it's not an IPv6 IP address
     if(!$self->{use_v6} && $self->{server} =~ /^[A-Fa-f0-9]{4}:[A-Fa-f0-9]{4}:/ && $self->{server} =~ s/:(\d+)$//g){
@@ -238,7 +252,7 @@ sub select {
 			}
 		}
 	},
- );
+ ) || return;
 
  return $self->{last}
 }
@@ -516,12 +530,16 @@ sub delete {
 
 sub _process_list {
     my ($self, $line) = @_;
+    $self->_debug(caller, __LINE__, '_process_list', $line) if $self->{debug};
+
     my @list;
     if ( $line =~ /^\*\s+(LIST|LSUB).*\s+\{\d+\}\s*$/i ) {
         chomp( my $res = $self->_sock->getline );
         $res =~ s/\r//;
         _escape($res);
         push @list, $res;
+
+	$self->_debug(caller, __LINE__, '_process_list', $res) if $self->{debug};
     } elsif ( $line =~ /^\*\s+(LIST|LSUB).*\s+(\".*?\")\s*$/i ||
               $line =~ /^\*\s+(LIST|LSUB).*\s+(\S+)\s*$/i ) {
         push @list, $2;
@@ -540,7 +558,7 @@ sub _process_list {
 This method returns a list of mailboxes. When called with no arguments it
 recurses from the IMAP root to get all mailboxes. The first optional
 argument is a mailbox path and the second is the path reference. RFC 3501
-has more information.
+section 6.3.8 has more information.
 
 On failure nothing is returned and the errstr() error handler is set with the error message.
 
@@ -557,7 +575,7 @@ sub mailboxes {
         return $self->_process_cmd(
             cmd     => [LIST => qq[$ref *]],
             final   => sub { _unescape($_) for @list; @list },
-            process => sub { push @list, $self->_process_list($_[0]) },
+            process => sub { push @list, $self->_process_list($_[0]);},
         );
     } else {
         return $self->_process_cmd(
@@ -800,6 +818,9 @@ sub _send_cmd {
     my $sock = $self->_sock;
     my $id   = $self->_nextid;
     my $cmd  = "$id $name" . ($value ? " $value" : "") . "\r\n";
+
+    $self->_debug(caller, __LINE__, '_send_cmd', $cmd) if $self->{debug};
+
     { local $\; print $sock $cmd; }
     return ($sock => $id);
 }
@@ -808,13 +829,15 @@ sub _cmd_ok {
     my ($self, $res) = @_;
     my $id = $self->_count;
 
+    $self->_debug(caller, __LINE__, '_send_cmd', $res) if $self->{debug};
+
     if($res =~ /^$id\s+OK/i){
 	return 1;
     } elsif($res =~ /^$id\s+(?:NO|BAD)(?:\s+(.+))?/i){
 	$self->_seterrstr($1 || 'unknown error');
 	return 0;
     } else {
-	$self->_seterrstr("unknown return string: $res");
+	$self->_seterrstr("warning unknown return string: $res");
 	return;
     }
 }
@@ -828,6 +851,12 @@ sub _read_multiline {
     push @lines, $sock->getline;
     $read_so_far += length($lines[-1]);
   }
+  if($self->{debug}){
+	for(my $i = 0; $i < @lines; $i++){
+		$self->_debug(caller, __LINE__, '_read_multiline', "[$i] $lines[$i]");
+	}
+  }
+
   return @lines;
 }
 
@@ -837,6 +866,8 @@ sub _process_cmd {
 
     my $res;
     while ( $res = $sock->getline ) {
+	$self->_debug(caller, __LINE__, '_process_cmd', $res) if $self->{debug};
+
         if ( $res =~ /^\*.*\{(\d+)\}$/ ) {
             $args{process}->($res);
             $args{process}->($_) foreach $self->_read_multiline($sock, $1);
@@ -856,9 +887,24 @@ sub _process_cmd {
 sub _seterrstr {
  my ($self, $err) = @_;
  $self->{_errstr} = $err;
+ $self->_debug(caller, __LINE__, '_seterrstr', $err) if $self->{debug};
  return;
 }
 
+sub _debug {
+ my ($self, $package, $filename, $line, $dline, $routine, $str) = @_;
+
+ $str =~ s/\n/\\n/g;
+ $str =~ s/\r/\\r/g;
+ $str =~ s/\cM/^M/g;
+
+ my $line = "[$package :: $filename :: $line\@$dline -> $routine] $str\n";
+ if(ref($self->{debug}) eq 'GLOB'){
+	write($self->{debug}, $line);
+ } else {
+	print STDOUT $line;
+ }
+}
 
 =pod
 
