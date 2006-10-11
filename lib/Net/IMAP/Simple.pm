@@ -4,7 +4,7 @@ use IO::File;
 use IO::Socket;
 
 use vars qw[$VERSION];
-$VERSION = $1 if('$Id: Simple.pm,v 1.16_1 2006/10/02 11:16:37 cfaber Exp $' =~ /,v ([\d_.]+) /);
+$VERSION = $1 if('$Id: Simple.pm,v 1.17 2006/10/11 16:23:45 cfaber Exp $' =~ /,v ([\d_.]+) /);
 
 =head1 NAME
 

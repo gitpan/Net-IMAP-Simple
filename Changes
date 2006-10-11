@@ -1,4 +1,7 @@
 Revision history for Perl extension Net::IMAP::Simple.
+1.17  2006-10-11
+      - Beta/Developer release -> production
+
 1.16_1 2006-10-02
       - Beta Release
       - Added debugging
