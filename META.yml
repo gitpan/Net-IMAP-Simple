@@ -1,10 +1,27 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Net-IMAP-Simple
-version:      1.17
-version_from: lib/Net/IMAP/Simple.pm
-installdirs:  site
+--- #YAML:1.0
+name:               Net-IMAP-Simple
+version:            1.1800
+abstract:           ~
+author:
+    - Paul Miller <jettero@cpan.org>
+license:            Perl Artistic
+distribution_type:  module
+configure_requires:
+    ExtUtils::MakeMaker:  0
+build_requires:
+    ExtUtils::MakeMaker:  0
 requires:
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.30
+    perl:  5.008
+resources:
+    repository:  http://github.com/jettero/net--imap--simple
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.52
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4
+keywords:
+    - imap
+    - simple
