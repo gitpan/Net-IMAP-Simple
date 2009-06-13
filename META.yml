@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-IMAP-Simple
-version:            1.1801
+version:            1.1899_04
 abstract:           ~
 author:
     - Paul Miller <jettero@cpan.org>
@@ -11,7 +11,9 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
-    perl:  5.008
+    IO::Select:  0
+    IO::Socket:  0
+    perl:        5.008
 resources:
     repository:  http://github.com/jettero/net--imap--simple
 no_index:
