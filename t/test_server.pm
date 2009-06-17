@@ -1,7 +1,7 @@
 our $tests;
 
 use strict;
-use Net::TCP;
+use IO::Socket::INET;
 no warnings;
 
 for my $mod (qw(Coro::EV Net::IMAP::Server IO::Socket::SSL)) {
@@ -21,7 +21,7 @@ for my $mod (qw(Coro::EV Net::IMAP::Server IO::Socket::SSL)) {
 $SIG{CHLD} = $SIG{PIPE} = sub {};
 
 sub shutdown_imap_server {
-    if( my $imapfh = Net::TCP->new(localhost=>7000) ) {
+    if( my $imapfh = IO::Socket::INET->new('localhost:7000') ) {
         print $imapfh "1 Shutdown\n";
     }
 }
@@ -48,7 +48,7 @@ if( my $pid = fork ) {
     $retries = 10;
 
     my $line; {
-        sleep 1 while (--$retries)>0 and not $imapfh = Net::TCP->new(localhost=>7000);
+        sleep 1 while (--$retries)>0 and not $imapfh = IO::Socket::INET->new('localhost:7000');
 
         if( not $imapfh ) {
             warn "unable to start Net::IMAP::Server, skipping all meaningful tests\n";
@@ -61,7 +61,7 @@ if( my $pid = fork ) {
     };
 
     chomp $line;
-    print STDERR "              $line ";
+    print STDERR (" " x 40, "$line ");
     close $imapfh;
 
     $0 = "Net::IMAP::Simple($$)";
@@ -93,9 +93,9 @@ if( my $pid = fork ) {
     };
     alarm $ENV{SUICIDE_SECONDS} || 60;
 
-    open my $pidfile, ">", "imap_server.pid" or die $!;
-    print $pidfile "$$\n"; # the pid_file option for the server doesn't seem to work...
-    close $pidfile;
+    open PIDFILE, ">", "imap_server.pid" or die $!;
+    print PIDFILE "$$\n"; # the pid_file option for the server doesn't seem to work...
+    close PIDFILE;
 
     close STDOUT; close STDERR;
     unlink "informal-imap-server-dump.log";
