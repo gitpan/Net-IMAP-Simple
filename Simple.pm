@@ -8,7 +8,7 @@ use IO::File;
 use IO::Socket;
 use IO::Select;
 
-our $VERSION = "1.1899_05";
+our $VERSION = "1.1899_06";
 
 sub new {
     my ( $class, $server, %opts ) = @_;
@@ -187,6 +187,29 @@ sub _reselect {
     return $self->select($mbox, $self->{examine_mode});
 }
 
+sub status {
+    my $self = shift;
+    my $mbox = shift || $self->current_box || "INBOX";
+
+    # Example: C: A042 STATUS blurdybloop (UIDNEXT MESSAGES)
+    #          S: * STATUS blurdybloop (MESSAGES 231 UIDNEXT 44292)
+    #          S: A042 OK STATUS completed
+
+    my ($unseen, $recent, $messages);
+
+    return $self->_process_cmd(
+        cmd     => [ STATUS => _escape($mbox) . " (UNSEEN RECENT MESSAGES)" ],
+        final   => sub { return unless defined $messages; ($unseen, $recent, $messages) },
+        process => sub {
+            if( my ($status) = $_[0] =~ m/\* STATUS.+?$mbox.+?\((.+?)\)/i ) {
+                $unseen   = $1 if $status =~ m/UNSEEN (\d+)/i;
+                $recent   = $1 if $status =~ m/RECENT (\d+)/i;
+                $messages = $1 if $status =~ m/MESSAGES (\d+)/i;
+            }
+        },
+    );
+}
+
 sub select { ## no critic -- too late to choose a different name now...
     my ( $self, $mbox, $examine_mode ) = @_;
     $examine_mode = $examine_mode ? 1:0;
@@ -204,9 +227,8 @@ sub select { ## no critic -- too late to choose a different name now...
 
     my $cmd = $examine_mode ? 'EXAMINE' : 'SELECT';
 
-    my $t_mbox = $mbox;
     return $self->_process_cmd(
-        cmd => [ $cmd => _escape($t_mbox) ],
+        cmd => [ $cmd => _escape($mbox) ],
         final => sub {
             my $nm = $self->{last} = $self->{BOXES}->{$mbox}->{messages};
 
@@ -297,24 +319,19 @@ sub top {
 sub seen {
     my ( $self, $number ) = @_;
 
-    my $lines = '';
-
-    return $self->_process_cmd(
-        cmd => [ FETCH => qq[$number (FLAGS)] ],
-        final => sub { $lines =~ /\\Seen/i },
-        process => sub { $lines .= $_[0] },
-    );
+    my @flags = $self->msg_flags($number);
+    return if $self->waserr;
+    return 1 if grep {$_ eq '\Seen'} @flags;
+    return 0;
 }
 
 sub deleted {
     my ( $self, $number ) = @_;
 
-    my $lines = '';
-    return $self->_process_cmd(
-        cmd     => [FETCH=> qq[$number (FLAGS)]],
-        final   => sub { $lines =~ /\\Deleted/i },
-        process => sub { $lines .= $_[0] },
-    );
+    my @flags = $self->msg_flags($number);
+    return if $self->waserr;
+    return 1 if grep {$_ eq '\Deleted'} @flags;
+    return 0;
 }
 
 sub list {
@@ -398,12 +415,27 @@ sub put {
 sub msg_flags {
     my ( $self, $number ) = @_;
 
-    my $lines = '';
+    my @flags;
+    $self->{_waserr} = 1; # assume something went wrong.
+
+    #  _send_cmd] 15 FETCH 12 (FLAGS)\r\n
+    #  _process_cmd] * 12 FETCH (FLAGS (\Seen))\r\n
+    #  _cmd_ok] * 12 FETCH (FLAGS (\Seen))\r\n
+    #  _seterrstr] warning unknown return string (id=15): * 12 FETCH (FLAGS (\Seen))\r\n
+    #  _process_cmd] 15 OK Success\r\n
 
     return $self->_process_cmd(
         cmd => [ FETCH => qq[$number (FLAGS)] ],
-        final => sub { my ($flags) = $lines =~ m/FLAGS \(([^()]+)\)/i; wantarray ? split( m/\s+/, $flags ) : $flags },
-        process => sub { $lines .= $_[0] },
+        final => sub {
+            return if $self->{_waserr};
+            wantarray ? @flags : "@flags";
+        },
+        process => sub {
+            if( $_[0] =~ m/\* $number FETCH \(FLAGS \(([^()]+?)\)\)/i ) {
+                @flags = $self->_process_flags($1);
+                delete $self->{_waserr};
+            }
+        },
     );
 }
 
@@ -649,6 +681,10 @@ sub copy {
     );
 }
 
+sub waserr {
+    return $_[0]->{_waserr};
+}
+
 sub errstr {
     return $_[0]->{_errstr};
 }
@@ -656,20 +692,22 @@ sub errstr {
 sub _nextid { return ++$_[0]->{count} }
 
 sub _escape {
-    $_[0] =~ s/\\/\\\\/g;
-    $_[0] =~ s/\"/\\\"/g;
-    $_[0] = "\"$_[0]\"";
+    my $val = shift;
+       $val =~ s/\\/\\\\/g;
+       $val =~ s/\"/\\\"/g;
+       $val = "\"$val\"";
 
-    return $_[0];
+    return $val;
 }
 
 sub _unescape {
-    $_[0] =~ s/^"//g;
-    $_[0] =~ s/"$//g;
-    $_[0] =~ s/\\\"/\"/g;
-    $_[0] =~ s/\\\\/\\/g;
+    my $val = shift;
+       $val =~ s/^"//g;
+       $val =~ s/"$//g;
+       $val =~ s/\\\"/\"/g;
+       $val =~ s/\\\\/\\/g;
 
-    return $_[0];
+    return $val;
 }
 
 sub _send_cmd {
