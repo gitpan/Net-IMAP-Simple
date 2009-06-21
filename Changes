@@ -1,3 +1,36 @@
+1.1899_07: Sun Jun 21 07:16:36 EDT 2009
+   - I decided to do get() my way, without ruining everything, by
+     blessing the arrayref and overloading '""'.
+   - I tought the t/35 test to prove that _process_command fails
+     just as Jonathan Kamens says.
+   - applied JIK's patch.
+
+1.1899_07: Sat Jun 20 22:12:00 EDT 2009
+   - I want to change the way get() works.  I don't think I
+     should, but I'd like to return the actual message in scalar
+     context and the lines in list context.  Returning the lines
+     as an arrayref makes no sense to me.
+
+1.1899_07: Sat Jun 20 15:26:13 EDT 2009
+   - while trying to get some delete and copy tests I ended up
+     working on expunge_mailbox() a little
+   - found another bug in Net::IMAP::Server::Mailbox... It's
+     clearly just a demo, but since I'm using it for my tests,
+     it's worth fixing.
+   - my delete tests do show that ranges like 3:5 really do work,
+     which makes me think RT#40203 may turn out to be spurious.
+     I'll let the tests prove it out before I close it though.
+   - I refactored the _reselect() stuff away, it was poorly
+     thought out.  There's a _clear_cache() instead.  Yeah, 40203
+     appears to be bogus because the client doesn't really parse
+     the sequence-set numbers.  I have confirmed for sure that
+     you can $imap->delete("3:5,7,10") and it'll work just like
+     you called delete 5 times.
+   - Copies seem to work fine too.  I'm going to close the
+     ticket.
+   - Documented the sequence set stuff so RT#40203 doesn't come
+     up again.
+
 1.1899_06: Fri Jun 19 08:54:07 EDT 2009
    - added a status() sub for the STATUS command
    - added a status() test, with some unseen() flag tests

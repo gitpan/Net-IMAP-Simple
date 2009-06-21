@@ -1,13 +1,13 @@
 --- #YAML:1.0
 name:               Net-IMAP-Simple
-version:            1.1899_06
+version:            1.1899_07
 abstract:           ~
 author:
     - Paul Miller <jettero@cpan.org>
 license:            Perl Artistic
 distribution_type:  module
 configure_requires:
-    ExtUtils::MakeMaker:  0
+    Net::IMAP::Server:  ~
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
