@@ -1,13 +1,17 @@
 --- #YAML:1.0
 name:               Net-IMAP-Simple
-version:            1.1900
+version:            1.1902
 abstract:           ~
 author:
     - Paul Miller <jettero@cpan.org>
 license:            Perl Artistic
 distribution_type:  module
 configure_requires:
-    Net::IMAP::Server:  ~
+    Coro:               0
+    Coro::EV:           0
+    DateTime:           0
+    IO::Socket::SSL:    0
+    Net::IMAP::Server:  0
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
