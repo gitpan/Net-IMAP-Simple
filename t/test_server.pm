@@ -4,7 +4,11 @@ use strict;
 use IO::Socket::INET;
 no warnings;
 
-use lib 'inc'; # use our local copy of Net::IMAP::Server
+BEGIN {
+    eval q [use lib 'inc'] # use our local copy of Net::IMAP::Server
+        unless $ENV{USE_SYSTEM_COPY};
+}
+
 for my $mod (qw(Coro::EV Net::IMAP::Server IO::Socket::SSL)) {
     my $res = do {
         # NOTE: the imap server emits various startup warnings on import
@@ -61,7 +65,12 @@ if( my $pid = fork ) {
         redo unless $line =~ m/OK/;
     };
 
+    my $file = $INC{'Net/IMAP/Server.pm'};
+    my $ver  = $Net::IMAP::Server::VERSION;
+
     chomp $line;
+    $line =~ s/(\* OK).*/$1 $file ($ver)/;
+
     my $len = length $line; $len ++;
     print STDERR "\e7\e[5000C\e[${len}D$line\e8";
     close $imapfh;
