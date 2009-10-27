@@ -8,7 +8,7 @@ use IO::File;
 use IO::Socket;
 use IO::Select;
 
-our $VERSION = "1.1907";
+our $VERSION = "1.1910";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -333,10 +333,31 @@ sub top {
 
     my @lines;
 
+    ## rfc2822 ## 2.2. Header Fields
+
+    ## rfc2822 ##    Header fields are lines composed of a field name, followed by a colon
+    ## rfc2822 ##    (":"), followed by a field body, and terminated by CRLF.  A field
+    ## rfc2822 ##    name MUST be composed of printable US-ASCII characters (i.e.,
+    ## rfc2822 ##    characters that have values between 33 and 126, inclusive), except
+    ## rfc2822 ##    colon.  A field body may be composed of any US-ASCII characters,
+    ## rfc2822 ##    except for CR and LF.  However, a field body may contain CRLF when
+    ## rfc2822 ##    used in header "folding" and  "unfolding" as described in section
+    ## rfc2822 ##    2.2.3.  All field bodies MUST conform to the syntax described in
+    ## rfc2822 ##    sections 3 and 4 of this standard.
+
     return $self->_process_cmd(
-        cmd     => [ FETCH => qq[$number RFC822.HEADER] ],
-        final   => sub { \@lines },
-        process => sub { push @lines, $_[0] if $_[0] =~ /^(?: \s+\S+ | [^:]+: )/x },
+        cmd   => [ FETCH => qq[$number RFC822.HEADER] ],
+        final => sub { \@lines },
+        process => sub {
+            return if $_[0] =~ m/\*\s+\d+\s+FETCH/i; # should this really be case insensitive?
+
+            if( not @lines or $_[0] =~ m/^[!-9;-~]+:/ ) {
+                push @lines, $_[0];
+
+            } else {
+                $lines[-1] .= $_[0];
+            }
+        },
     );
 }
 
@@ -374,6 +395,79 @@ sub list {
         },
     );
 }
+
+sub search {
+    my ($self, $search) = @_;
+    $search ||= "ALL";
+
+    my @seq;
+
+    return $self->_process_cmd(
+        cmd => [ SEARCH => $search ],
+        final => sub { wantarray ? @seq : int @seq },
+        process => sub { if ( my ($msgs) = $_[0] =~ /^\*\s+SEARCH\s+(.*)/i ) {
+            push @seq, $1 while $msgs =~ m/\b(\d+)\b/g;
+        } },
+    );
+}
+
+sub search_seen     { my $self = shift; return $self->search("SEEN"); }
+sub search_recent   { my $self = shift; return $self->search("RECENT"); }
+sub search_answered { my $self = shift; return $self->search("ANSWERED"); }
+sub search_deleted  { my $self = shift; return $self->search("DELETED"); }
+sub search_flagged  { my $self = shift; return $self->search("FLAGGED"); }
+sub search_draft    { my $self = shift; return $self->search("FLAGGED"); }
+
+sub search_unseen     { my $self = shift; return $self->search("UNSEEN"); }
+sub search_old        { my $self = shift; return $self->search("OLD"); }
+sub search_unanswered { my $self = shift; return $self->search("UNANSWERED"); }
+sub search_undeleted  { my $self = shift; return $self->search("UNDELETED"); }
+sub search_unflagged  { my $self = shift; return $self->search("UNFLAGGED"); }
+
+sub search_smaller { my $self = shift; my $octets = int shift; return $self->search("SMALLER $octets"); }
+sub search_larger  { my $self = shift; my $octets = int shift; return $self->search("LARGER $octets"); }
+
+sub _process_date {
+    my $d = shift;
+
+    if( eval 'use Date::Manip (); 1' ) { ## no critic
+        if( my $pd = Date::Manip::ParseDate($d) ) {
+
+            # NOTE: RFC 3501 wants this poorly-internationalized date format
+            # for SEARCH.  Not my fault.
+
+            return Date::Manip::UnixDate($pd, '%d-%m-%Y');
+        }
+
+    } else {
+        # TODO: complain if the date isn't %d-%m-%Y
+
+        # I'm not sure there's anything to be gained by doing so ...  They'll
+        # just get an imap error they can choose to handle.
+    }
+
+    return $d;
+}
+
+sub _process_qstring {
+    my $t = shift;
+       $t =~ s/\\/\\\\/g;
+       $t =~ s/"/\\"/g;
+
+    return "\"$t\"";
+}
+
+sub search_before      { my $self = shift; my $d = _process_date(shift); return $self->search("BEFORE $d"); }
+sub search_since       { my $self = shift; my $d = _process_date(shift); return $self->search("SINCE $d"); }
+sub search_sent_before { my $self = shift; my $d = _process_date(shift); return $self->search("SENTBEFORE $d"); }
+sub search_sent_since  { my $self = shift; my $d = _process_date(shift); return $self->search("SENTSINCE $d"); }
+
+sub search_from    { my $self = shift; my $t = _process_qstring(shift); return $self->search("FROM $t"); }
+sub search_to      { my $self = shift; my $t = _process_qstring(shift); return $self->search("TO $t"); }
+sub search_cc      { my $self = shift; my $t = _process_qstring(shift); return $self->search("CC $t"); }
+sub search_bcc     { my $self = shift; my $t = _process_qstring(shift); return $self->search("BCC $t"); }
+sub search_subject { my $self = shift; my $t = _process_qstring(shift); return $self->search("SUBJECT $t"); }
+sub search_body    { my $self = shift; my $t = _process_qstring(shift); return $self->search("BODY $t"); }
 
 sub get {
     my ( $self, $number ) = @_;
@@ -780,10 +874,13 @@ sub _cmd_ok {
         $self->_seterrstr( $1 || 'unknown error' );
         return 0;
 
+    } elsif ( $res =~ m/^\*\s+/ ) {
+
     } else {
         $self->_seterrstr("warning unknown return string (id=$id): $res");
-        return;
     }
+
+    return;
 }
 
 sub _read_multiline {
