@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-IMAP-Simple
-version:            1.1910
+version:            1.1910_1
 abstract:           ~
 author:
     - Paul Miller <jettero@cpan.org>
@@ -17,6 +17,7 @@ configure_requires:
     Email::MIME::ContentType:  0
     Email::Simple:        1.999
     Encode::IMAPUTF7:     0
+    List::MoreUtils:      0
     MIME::Base64:         0
     Net::Server::Coro:    0.3
     Net::SSLeay:          0
