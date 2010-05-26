@@ -8,7 +8,7 @@ use IO::File;
 use IO::Socket;
 use IO::Select;
 
-our $VERSION = "1.1912";
+our $VERSION = "1.1913";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -508,7 +508,7 @@ sub put {
     @flags = $self->_process_flags(@flags);
 
     return $self->_process_cmd(
-        cmd   => [ APPEND => "$mailbox_name (@flags) {$size}" ],
+        cmd   => [ APPEND => _escape($mailbox_name) ." (@flags) {$size}" ],
         final => sub { $self->_clear_cache },
         process => sub {
             if ($size) {
@@ -659,9 +659,8 @@ sub _process_list {
         chomp( my $res = $self->_sock->getline );
 
         $res =~ s/\r//;
-        _escape($res);
 
-        push @list, $res;
+        push @list, _escape($res);
 
         $self->_debug( caller, __LINE__, '_process_list', $res ) if $self->{debug};
 
