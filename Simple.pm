@@ -8,7 +8,7 @@ use IO::File;
 use IO::Socket;
 use IO::Select;
 
-our $VERSION = "1.1913";
+our $VERSION = "1.1914";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -326,6 +326,22 @@ sub current_box {
     my ($self) = @_;
 
     return ( $self->{working_box} ? $self->{working_box} : 'INBOX' );
+}
+
+sub close { ## no critic -- we already have tons of methods with built in names
+
+    my $self = shift;
+    $self->{working_box} = undef;
+    return $self->_process_cmd(
+        cmd => [ "CLOSE" ],
+    );
+}
+
+sub noop {
+    my $self = shift;
+    return $self->_process_cmd(
+        cmd => [ "NOOP" ],
+    );
 }
 
 sub top {
