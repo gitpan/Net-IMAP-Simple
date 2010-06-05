@@ -80,10 +80,16 @@ sub internaldate {
 
     if (ref $value) {
         $self->{internaldate} = $value->strftime("%e-%b-%Y %T %z");
+        $self->{internaldate} =~ s/^\s+//;
+        $self->{internaldate} =~ s/\s+$//;
+
     } else {
+        $value =~ s/^\s+//;
+        $value =~ s/\s+$//;
         $self->{internaldate} = $value;
         $value = $self->INTERNALDATE_PARSER->parse_datetime($value);
     }
+
     $value->truncate( to => "day" );
     $value->set_time_zone( "floating" );
     $value->set_time_zone( "UTC" );
@@ -461,12 +467,12 @@ sub mime_select {
             $result = $copy->as_string ? $copy->as_string . "\r\n" : "";
         } elsif ( uc $_ eq "TEXT" ) {
             $mime ||= $self->mime;
-            $result = $mime->body;
+            $result = $mime->body_raw;
         } elsif ( $_ =~ /^\d+$/i ) {
             $mime ||= $self->mime;
             my @parts = $mime->parts;
             $mime   = $parts[ $_ - 1 ];
-            $result = $mime->body;
+            $result = $mime->body_raw;
         }
     }
 
