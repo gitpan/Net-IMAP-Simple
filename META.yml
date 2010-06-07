@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Net-IMAP-Simple
-version:            1.1915
+version:            1.1916
 abstract:           ~
 author:
     - Paul Miller <jettero@cpan.org>
