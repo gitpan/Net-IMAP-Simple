@@ -1,7 +1,15 @@
+package Net::IMAP::SimpleX::NIL;
+
+use strict;
+use warnings;
+use overload fallback=>1, '""' => sub { "" };
+sub new { return bless {}, "Net::IMAP::SimpleX::NIL" }
+
 package Net::IMAP::SimpleX::Body;
 
 use strict;
 use warnings;
+no warnings 'once'; ## no critic
 
 BEGIN {
   our @fields = qw/content_description encoded_size charset content_type format part_number id name encoding/;
@@ -20,12 +28,13 @@ package Net::IMAP::SimpleX::BodySummary;
 
 use strict;
 use warnings;
+no warnings 'once'; ## no critic
 
 sub new {
   my ($class, $data) = @_;
   my $self;
 
-  Net::IMAP::SimpleX::__id_parts($data);
+  Net::IMAP::SimpleX::_id_parts($data);
 
   if ($data->{parts}) {
     $self = $data;
@@ -46,10 +55,11 @@ package Net::IMAP::SimpleX;
 
 use strict;
 use warnings;
+use Carp;
 use Parse::RecDescent;
 use base 'Net::IMAP::Simple';
 
-our $VERSION = "1.0000";
+our $VERSION = "1.0010";
 
 # directly from http://tools.ietf.org/html/rfc3501#section-9
 # try and flatten, format as best we can
@@ -107,16 +117,48 @@ word:               /[^\s\)\(]+/
                     { $item[1] =~ s/\"//g; $return = $item[1];}
 };
 
+our $fetch_grammar = q&
+    fetch: fetch_item(s) {$return={ map {(@$_)} reverse @{$item[1]} }}
+
+    fetch_item: cmd_start 'FETCH' '(' value_pair(s?) ')' {$return=[$item[1], {map {(@$_)} @{$item[4]}}]}
+
+    cmd_start: '*' /\d+/ {$return=$item[2]}
+
+    value_pair: tag value {$return=[$item[1], $item[2]]}
+
+    tag: /BODY(?:\.PEEK)?(?:\[[^\]]*\])?(?:<[\d\.]*>)?/i
+       | atom
+
+    value: atom | string | parenthized_list
+
+    atom:   /[^"()\s{}[\]]+/ {
+            # strictly speaking, the NIL atom should be undef, but P::RD isn't going to allow that.
+            # returning a null character instead
+            $return=($item[1] eq "NIL" ? Net::IMAP::SimpleX::NIL->new : $item[1])
+        }
+
+    string: '"' /[^\x0d\x0a"]*/ '"' {$return=$item[2]}
+        | /{(\d+)(?{ $::NISF_OCTETS=$^N })}\x0d\x0a((??{ "(?s:.{$::NISF_OCTETS})" }))/s {
+            # returning $2, rather than $item[x] because we really
+            # just want the group 2 item from the RE
+            $return = $2;
+        }
+
+    parenthized_list: '(' value(s?) ')' {$return=$item[2]}
+&;
 
 sub new {
     my $class = shift;
     if (my $self = $class->SUPER::new(@_)) {
-        $self->{__body_parser} = Parse::RecDescent->new($body_grammar);
+
+        $self->{parser}{body_summary}  = Parse::RecDescent->new($body_grammar);
+        $self->{parser}{fetch}         = Parse::RecDescent->new($fetch_grammar);
+
         return $self;
     }
 }
 
-sub __id_parts {
+sub _id_parts {
     my $data  = shift;
     my $pre   = shift;
     $pre = $pre ? "$pre." : '';
@@ -124,7 +166,7 @@ sub __id_parts {
     my $id = 1;
     if (my $parts = $data->{parts}) {
         for my $sub (@$parts){
-          __id_parts($sub,"$pre$id") if $sub->{parts};
+          _id_parts($sub,"$pre$id") if $sub->{parts};
           $sub->{part_number} = "$pre$id";
           $id++;
         }
@@ -148,9 +190,52 @@ sub body_summary {
 
         process => sub {
             if ($_[0] =~ m/\(BODY\s+(.*?)\)\s*$/i) {
-                my $body_parts = $self->{__body_parser}->body($1);
+                my $body_parts = $self->{parser}{body_summary}->body($1);
                 $bodysummary = Net::IMAP::SimpleX::BodySummary->new($body_parts);
             }
+        },
+
+    );
+}
+
+sub fetch {
+    my $self = shift;
+    my $msg  = shift; $msg =~ s/[^\*\d:,-]//g; croak "which message?" unless $msg;
+    my $spec = "@_" || 'FULL';
+
+    $self->_be_on_a_box;
+
+    # cut and pasted from ::Server
+    $spec = [qw/FLAGS INTERNALDATE RFC822.SIZE ENVELOPE/]      if uc $spec eq "ALL";
+    $spec = [qw/FLAGS INTERNALDATE RFC822.SIZE/]               if uc $spec eq "FAST";
+    $spec = [qw/FLAGS INTERNALDATE RFC822.SIZE ENVELOPE BODY/] if uc $spec eq "FULL";
+    $spec = [ $spec ] unless ref $spec;
+
+    my $stxt = join(" ", map {s/[^()[\]\s<>\da-zA-Z.-]//g; uc($_)} @$spec); ## no critic: really? don't modify $_? pfft
+
+    $self->_debug( caller, __LINE__, parsed_fetch=> "$msg ($stxt)" ) if $self->{debug};
+
+    my $entire_response = "";
+
+    return $self->_process_cmd(
+        cmd => [ FETCH => qq[$msg ($stxt)] ],
+
+        final => sub {
+            #open my $fh, ">", "entire_response.dat";
+            #print $fh $entire_response;
+
+            if( my $res = $self->{parser}{fetch}->fetch($entire_response) ) {
+                $self->_debug( caller, __LINE__, parsed_fetch=> "PARSED") if $self->{debug};
+                return wantarray ? %$res : $res;
+            }
+
+            $self->_debug( caller, __LINE__, parsed_fetch=> "PARSE FAIL") if $self->{debug};
+            return;
+        },
+
+        process => sub {
+            $entire_response .= $_[0];
+            return 1;
         },
 
     );

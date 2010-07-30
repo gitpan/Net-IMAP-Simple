@@ -8,7 +8,7 @@ use IO::File;
 use IO::Socket;
 use IO::Select;
 
-our $VERSION = "1.2001";
+our $VERSION = "1.2010_99";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -211,24 +211,67 @@ sub _clear_cache {
     return 1;
 }
 
+sub uidnext {
+    my $self = shift;
+    my $mbox = shift || $self->current_box || "INBOX";
+
+    return $self->status($mbox => 'uidnext');
+}
+
+sub uidvalidity {
+    my $self = shift;
+    my $mbox = shift || $self->current_box || "INBOX";
+
+    return $self->status($mbox => 'uidvalidity');
+}
+
+sub uid {
+    my $self = shift;
+    my $msgno = shift || "1:*";
+
+    $self->_be_on_a_box; # does a select if we're not on a mailbox
+
+    my @_uids;
+
+    # 3 UID SEARCH 28,4,30\r\n
+    # * SEARCH 58864 58888 58890\r\n
+
+    return $self->_process_cmd(
+        cmd     => [ "UID SEARCH " . _escape($msgno) ],
+        final   => sub { wantarray ? @_uids : $_uids[-1] },
+        process => sub {
+            if( my ($digits) = $_[0] =~ m/\* SEARCH\s+([\d\s]+)/i ) {
+                @_uids = split m/\s+/, $digits;
+            }
+        },
+    );
+}
+
 sub status {
     my $self = shift;
     my $mbox = shift || $self->current_box || "INBOX";
+    my @fields = @_ ? @_ : qw(unseen recent messages);
 
     # Example: C: A042 STATUS blurdybloop (UIDNEXT MESSAGES)
     #          S: * STATUS blurdybloop (MESSAGES 231 UIDNEXT 44292)
     #          S: A042 OK STATUS completed
 
-    my ($unseen, $recent, $messages);
+    @fields = map{uc$_} @fields;
+    my %fields;
 
     return $self->_process_cmd(
-        cmd     => [ STATUS => _escape($mbox) . " (UNSEEN RECENT MESSAGES)" ],
-        final   => sub { return unless defined $messages; ($unseen, $recent, $messages) },
+        cmd     => [ STATUS => _escape($mbox) . " (@fields)" ],
+        final   => sub { (@fields{@fields}) },
         process => sub {
             if( my ($status) = $_[0] =~ m/\* STATUS.+?$mbox.+?\((.+?)\)/i ) {
-                $unseen   = $1 if $status =~ m/UNSEEN (\d+)/i;
-                $recent   = $1 if $status =~ m/RECENT (\d+)/i;
-                $messages = $1 if $status =~ m/MESSAGES (\d+)/i;
+
+                for( @fields ) {
+                    $fields{$_} = _unescape($1)
+                        if $status =~ m/$_\s+(\S+|"[^"]+"|'[^']+')/i
+                            # NOTE: this regex isn't perfect, but should almost always work
+                            # for status values returned by a well meaning IMAP server
+                }
+
             }
         },
     );
@@ -363,7 +406,12 @@ sub top {
 
     return $self->_process_cmd(
         cmd   => [ FETCH => qq[$number RFC822.HEADER] ],
-        final => sub { \@lines },
+        final => sub {
+            $lines[-1] =~ s/\)\x0d\x0a\z//; # sometimes we get this and I don't think we should
+                                            # I really hoping I'm not breaking someting by doing this.
+
+            \@lines
+        },
         process => sub {
             return if $_[0] =~ m/\*\s+\d+\s+FETCH/i; # should this really be case insensitive?
 
@@ -418,6 +466,8 @@ sub search {
     $charset  ||= 'UTF-8';
     my $cmd   = 'SEARCH';
 
+    $self->_be_on_a_box; # does a select if we're not on a mailbox
+
     # add rfc5256 sort, requires charset :(
     if ($sort) {
         $sort = uc $sort;
@@ -460,7 +510,7 @@ sub _process_date {
             # NOTE: RFC 3501 wants this poorly-internationalized date format
             # for SEARCH.  Not my fault.
 
-            return Date::Manip::UnixDate($pd, '%d-%m-%Y');
+            return Date::Manip::UnixDate($pd, '%d-%b-%Y');
         }
 
     } else {
@@ -597,20 +647,35 @@ sub getfh {
     );
 }
 
+sub logout {
+    my $self = shift;
+
+    return $self->_process_cmd( cmd => ['LOGOUT'], final => sub { $self->_sock->close; 1 }, process => sub { } );
+}
+
 sub quit {
     my ( $self, $hq ) = @_;
-    $self->_send_cmd('EXPUNGE');
+    $self->_send_cmd('EXPUNGE'); # XXX: $self->expunge_mailbox?
 
     if ( !$hq ) {
+        # XXX: $self->logout?
         $self->_process_cmd( cmd => ['LOGOUT'], final => sub { 1 }, process => sub { } );
 
     } else {
+        # XXX: do people use the $hq?
         $self->_send_cmd('LOGOUT');
     }
 
     $self->_sock->close;
 
     return 1;
+}
+
+sub _be_on_a_box {
+    my $self = shift;
+    return if $self->{working_box};
+    $self->select; # sit on something
+    return;
 }
 
 sub last { ## no critic -- too late to choose a different name now...
@@ -931,6 +996,9 @@ sub _process_cmd {
     my ( $self, %args ) = @_;
     my ( $sock, $id )   = $self->_send_cmd( @{ $args{cmd} } );
 
+    $args{process} = sub {} unless ref($args{process}) eq "CODE";
+    $args{final}   = sub {} unless ref($args{final})   eq "CODE";
+
     my $res;
     while ( $res = $sock->getline ) {
         $self->_debug( caller, __LINE__, '_process_cmd', $res ) if $self->{debug};
@@ -982,6 +1050,14 @@ sub _debug {
 
     if ( ref( $self->{debug} ) eq 'GLOB' ) {
         print { $self->{debug} } $line;
+
+    } elsif( $self->{debug} eq "warn" ) {
+        warn $line;
+
+    } elsif( $self->{debug} =~ m/^file:(.+)/ ) {
+        open my $out, ">>",  $1 or warn "[log io fail: $@] $line";
+        print $out $line;
+        CORE::close($out);
 
     } else {
         print STDOUT $line;
