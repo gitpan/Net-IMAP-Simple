@@ -137,11 +137,10 @@ our $fetch_grammar = q&
             $return=($item[1] eq "NIL" ? Net::IMAP::SimpleX::NIL->new : $item[1])
         }
 
-    string: '"' /[^\x0d\x0a"]*/ '"' {$return=$item[2]}
-        | /{(\d+)(?{ $::NISF_OCTETS=$^N })}\x0d\x0a((??{ "(?s:.{$::NISF_OCTETS})" }))/s {
-            # returning $2, rather than $item[x] because we really
-            # just want the group 2 item from the RE
-            $return = $2;
+    string: '"' /[^\x0d\x0a"]*/ '"' {$return=$item[2]} | '{' /\d+/ "}\x0d\x0a" {
+            $return = length($text) >= $item[2]
+                    ? substr($text,0,$item[2],"") # if the production is accepted, we alter the input stream
+                    : undef;
         }
 
     parenthized_list: '(' value(s?) ')' {$return=$item[2]}
