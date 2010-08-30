@@ -7,8 +7,9 @@ use Carp;
 use IO::File;
 use IO::Socket;
 use IO::Select;
+use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.2012";
+our $VERSION = "1.2015";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -17,6 +18,8 @@ BEGIN {
        use overload fallback=>1, '""' => sub { local $"=""; "@{$_[0]}" };
        sub new { bless $_[1] })
 }
+
+our $uidm;
 
 sub new {
     my ( $class, $server, %opts ) = @_;
@@ -52,11 +55,16 @@ sub new {
         } or croak "IO::Socket::INET6 must be installed in order to use_v6";
     }
 
-    my ( $srv, $prt ) = split( /:/, $server, 2 );
-    $prt ||= ( $opts{port} ? $opts{port} : $self->_port );
+    if( $server =~ m/cmd:(.+)/ ) {
+        $self->{cmd} = $1;
 
-    $self->{server} = $srv;
-    $self->{port}   = $prt;
+    } else {
+        my ( $srv, $prt ) = split( /:/, $server, 2 );
+        $prt ||= ( $opts{port} ? $opts{port} : $self->_port );
+
+        $self->{server} = $srv;
+        $self->{port}   = $prt;
+    }
 
     $self->{timeout}          = ( $opts{timeout} ? $opts{timeout} : $self->_timeout );
     $self->{retry}            = ( $opts{retry} ? $opts{retry} : $self->_retry );
@@ -67,8 +75,10 @@ sub new {
     $self->{debug}            = $opts{debug};
 
     # Pop the port off the address string if it's not an IPv6 IP address
-    if ( !$self->{use_v6} && $self->{server} =~ /^[A-Fa-f0-9]{4}:[A-Fa-f0-9]{4}:/ && $self->{server} =~ s/:(\d+)$//g ) {
-        $self->{port} = $1;
+    if( $self->{server} ) {
+        if ( !$self->{use_v6} && $self->{server} =~ /^[A-Fa-f0-9]{4}:[A-Fa-f0-9]{4}:/ && $self->{server} =~ s/:(\d+)$//g ) {
+            $self->{port} = $1;
+        }
     }
 
     my $sock;
@@ -97,10 +107,11 @@ sub new {
 
     my $select = $self->{sel} = IO::Select->new($sock);
 
-    $self->_debug( caller, __LINE__, 'new', "looking for greeting" ) if $self->{debug};
+    $self->_debug( caller, __LINE__, 'new', "waiting for socket ready" ) if $self->{debug};
 
     my $greeting_ok = 0;
     if( $select->can_read($self->{timeout}) ) {
+        $self->_debug( caller, __LINE__, 'new', "looking for greeting" ) if $self->{debug};
         if( my $line = $sock->getline ) {
             # Cool, we got a line, check to see if it's a
             # greeting.
@@ -132,13 +143,18 @@ sub _connect {
     my ($self) = @_;
     my $sock;
 
-    $sock = $self->_sock_from->new(
-        PeerAddr => $self->{server},
-        PeerPort => $self->{port},
-        Timeout  => $self->{timeout},
-        Proto    => 'tcp',
-        ( $self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : () )
-    );
+    if( $self->{cmd} ) {
+        $sock = Net::IMAP::Simple::PipeSocket->new(cmd=>$self->{cmd});
+
+    } else {
+        $sock = $self->_sock_from->new(
+            PeerAddr => $self->{server},
+            PeerPort => $self->{port},
+            Timeout  => $self->{timeout},
+            Proto    => 'tcp',
+            ( $self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : () )
+        );
+    }
 
     return $sock;
 }
@@ -225,26 +241,28 @@ sub uidvalidity {
     return $self->status($mbox => 'uidvalidity');
 }
 
+sub uidsearch {
+    my $self = shift;
+
+    local $uidm = 1;
+
+    return $self->search(@_);
+}
+
 sub uid {
+    my $self = shift;
+       $self->_be_on_a_box; # does a select if we're not on a mailbox
+
+    return $self->uidsearch( shift || "1:*" );
+}
+
+sub seq {
     my $self = shift;
     my $msgno = shift || "1:*";
 
     $self->_be_on_a_box; # does a select if we're not on a mailbox
 
-    my @_uids;
-
-    # 3 UID SEARCH 28,4,30\r\n
-    # * SEARCH 58864 58888 58890\r\n
-
-    return $self->_process_cmd(
-        cmd     => [ "UID SEARCH " . _escape($msgno) ],
-        final   => sub { wantarray ? @_uids : $_uids[-1] },
-        process => sub {
-            if( my ($digits) = $_[0] =~ m/\* SEARCH\s+([\d\s]+)/i ) {
-                @_uids = split m/\s+/, $digits;
-            }
-        },
-    );
+    return $self->search("uid $msgno");
 }
 
 sub status {
@@ -443,6 +461,32 @@ sub deleted {
     return 0;
 }
 
+sub range2list {
+    my $self_or_class = shift;
+    my %h;
+    my @items = sort {$a<=>$b} grep {!$h{$_}++} map { m/(\d+):(\d+)/ ? ($1 .. $2) : ($_) } split(m/[,\s]+/, shift);
+
+    return @items;
+}
+
+sub list2range {
+    my $self_or_class = shift;
+    my %h;
+    my @a = sort { $a<=>$b } grep {!$h{$_}++} grep {m/^\d+/} grep {defined $_} @_;
+    my @b;
+
+    while(@a) {
+        my $e = 0;
+
+        $e++ while $e+1 < @a and $a[$e]+1 == $a[$e+1];
+
+        push @b, ($e>0 ? [$a[0], $a[$e]] : [$a[0]]);
+        splice @a, 0, $e+1;
+    }
+
+    return join(",", map {join(":", @$_)} @b);
+}
+
 sub list {
     my ( $self, $number ) = @_;
 
@@ -462,9 +506,11 @@ sub list {
 
 sub search {
     my ($self, $search, $sort, $charset) = @_;
+
     $search   ||= "ALL";
     $charset  ||= 'UTF-8';
-    my $cmd   = 'SEARCH';
+
+    my $cmd = $uidm ? 'UID SEARCH' : 'SEARCH';
 
     $self->_be_on_a_box; # does a select if we're not on a mailbox
 
@@ -480,8 +526,10 @@ sub search {
         cmd => [ $cmd => $search ],
         final => sub { wantarray ? @seq : int @seq },
         process => sub { if ( my ($msgs) = $_[0] =~ /^\*\s+(?:SEARCH|SORT)\s+(.*)/i ) {
-            push @seq, $1 while $msgs =~ m/\b(\d+)\b/g;
-        } },
+
+            @seq = $self->range2list($msgs);
+
+        }},
     );
 }
 
