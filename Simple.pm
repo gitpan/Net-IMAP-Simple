@@ -9,7 +9,7 @@ use IO::Socket;
 use IO::Select;
 use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.2015";
+our $VERSION = "1.2016";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -66,13 +66,14 @@ sub new {
         $self->{port}   = $prt;
     }
 
-    $self->{timeout}          = ( $opts{timeout} ? $opts{timeout} : $self->_timeout );
-    $self->{retry}            = ( $opts{retry} ? $opts{retry} : $self->_retry );
-    $self->{retry_delay}      = ( $opts{retry_delay} ? $opts{retry_delay} : $self->_retry_delay );
-    $self->{bindaddr}         = $opts{bindaddr};
-    $self->{use_select_cache} = $opts{use_select_cache};
-    $self->{select_cache_ttl} = $opts{select_cache_ttl};
-    $self->{debug}            = $opts{debug};
+    $self->{timeout}           = ( $opts{timeout} ? $opts{timeout} : $self->_timeout );
+    $self->{retry}             = ( $opts{retry} ? $opts{retry} : $self->_retry );
+    $self->{retry_delay}       = ( $opts{retry_delay} ? $opts{retry_delay} : $self->_retry_delay );
+    $self->{bindaddr}          = $opts{bindaddr};
+    $self->{use_select_cache}  = $opts{use_select_cache};
+    $self->{select_cache_ttl}  = $opts{select_cache_ttl};
+    $self->{debug}             = $opts{debug};
+    $self->{readline_callback} = $opts{readline_callback};
 
     # Pop the port off the address string if it's not an IPv6 IP address
     if( $self->{server} ) {
@@ -159,10 +160,10 @@ sub _connect {
     return $sock;
 }
 
-sub _port        { return $_[0]->{use_ssl} ? 993 : 143 } 
+sub _port        { return $_[0]->{use_ssl} ? 993 : 143 }
 sub _sock        { return $_[0]->{sock} }
 sub _count       { return $_[0]->{count} }
-sub _last        { $_[0]->select unless exists $_[0]->{last}; return $_[0]->{last} }
+sub _last        { $_[0]->select unless exists $_[0]->{last}; return $_[0]->{last}||0 }
 sub _timeout     { return 90 }
 sub _retry       { return 1 }
 sub _retry_delay { return 5 }
@@ -490,8 +491,14 @@ sub list2range {
 sub list {
     my ( $self, $number ) = @_;
 
+    # NOTE: this entire function is horrible:
+    # 1. it should be called message_size() or something similar
+    # 2. what if $number is a range? none of this works right
+
     my $messages = $number || '1:' . $self->_last;
     my %list;
+
+    return {} if $messages eq "1:0";
 
     return $self->_process_cmd(
         cmd => [ FETCH => qq[$messages RFC822.SIZE] ],
@@ -1058,13 +1065,19 @@ sub _process_cmd {
     $args{process} = sub {} unless ref($args{process}) eq "CODE";
     $args{final}   = sub {} unless ref($args{final})   eq "CODE";
 
+    my $cb = $self->{readline_callback};
+
     my $res;
     while ( $res = $sock->getline ) {
+        $cb->($res) if $cb;
         $self->_debug( caller, __LINE__, '_process_cmd', $res ) if $self->{debug};
 
         if ( $res =~ /^\*.*\{(\d+)\}[\r\n]*$/ ) {
             $args{process}->($res);
-            $args{process}->($_) foreach $self->_read_multiline( $sock, $1 );
+            foreach( $self->_read_multiline( $sock, $1 ) ) {
+                $cb->($_) if $cb;
+                $args{process}->($_)
+            }
 
         } else {
             my $ok = $self->_cmd_ok($res);
