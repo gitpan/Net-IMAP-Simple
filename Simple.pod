@@ -256,7 +256,7 @@ This method is an alias for C<$imap->select>
 
 =item flags
 
-    print "Avaliable server flags: " . join(", ", $imap->flags) . "\n";
+    print "Available server flags: " . join(", ", $imap->flags) . "\n";
 
 This method accepts an optional folder name and returns the current available
 server flags as a list, for the selected folder. If no folder name is provided
@@ -390,7 +390,7 @@ Save a message to the server under the folder named C<$mailbox_name>.  You may
 optionally specify flags for the mail (e.g. C<\Seen>, C<\Answered>), but they
 must start with a slash.
 
-If C<$msg> is an arrayref, the lines will be printed correctly.
+If C<$message> is an arrayref, the lines will be printed correctly.
 
 =item msg_flags
 
@@ -596,7 +596,7 @@ failure and the C<errstr()> error handler is set with the error message.
   print "copied" if $imap->copy( $message_number, $mailbox );
 
 This method copies the message number (or L<sequence set>) in the currently
-selected mailbox to the fold specified in the second argument.  Both arguments
+selected mailbox to the folder specified in the second argument.  Both arguments
 are required.  On success this method returns true. Returns false on failure and
 the C<errstr()> error handler is set with the error message.
 
@@ -797,8 +797,8 @@ attempt to force your string into the RFC3501 quoted-string format.
 This function takes a single argument we'll call C<< <x> >> and returns numbers
 of messages that were received before C<< <x> >>.  If you have L<Date::Manip>
 installed (optional), this function will attempt to force the date into the
-format C<%d-%m-%Y> (date-month-year) as RFC3501 requires.  If you do not have
-that module, no attempt will be made to coerce your date into the correct
+format C<%d-%b-%Y> (date-monthName-year) as RFC3501 requires.  If you do not
+have that module, no attempt will be made to coerce your date into the correct
 format.
 
 =item search_since

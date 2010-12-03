@@ -9,7 +9,7 @@ use IO::Socket;
 use IO::Select;
 use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.2018";
+our $VERSION = "1.2019";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -619,10 +619,9 @@ sub get {
 
 sub _process_flags {
     my $self = shift;
+    my @ret = map { split m/\s+/, $_ } grep { $_ } @_;
 
-    return grep { m/^\\\w+\z/ }
-            map { split m/\s+/, $_ }
-            @_;
+    return @ret;
 }
 
 sub put {
