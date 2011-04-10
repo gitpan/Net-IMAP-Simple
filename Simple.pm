@@ -9,7 +9,7 @@ use IO::Socket;
 use IO::Select;
 use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.2020";
+our $VERSION = "1.2022";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -154,7 +154,7 @@ sub _connect {
             PeerPort => $self->{port},
             Timeout  => $self->{timeout},
             Proto    => 'tcp',
-            ( $self->{bindaddr} ? { LocalAddr => $self->{bindaddr} } : () )
+            ( $self->{bindaddr} ? ( LocalAddr => $self->{bindaddr} ) : () )
         );
     }
 
