@@ -1,0 +1,69 @@
+{
+   "abstract" : "unknown",
+   "author" : [
+      "Paul Miller <jettero@cpan.org>"
+   ],
+   "dynamic_config" : 1,
+   "generated_by" : "ExtUtils::MakeMaker version 6.58, CPAN::Meta::Converter version 2.110930001",
+   "keywords" : [
+      "imap",
+      "simple"
+   ],
+   "license" : [
+      "unknown"
+   ],
+   "meta-spec" : {
+      "url" : "http://search.cpan.org/perldoc?CPAN::Meta::Spec",
+      "version" : "2"
+   },
+   "name" : "Net-IMAP-Simple",
+   "no_index" : {
+      "directory" : [
+         "t",
+         "inc"
+      ]
+   },
+   "prereqs" : {
+      "build" : {
+         "requires" : {
+            "ExtUtils::MakeMaker" : 0
+         }
+      },
+      "configure" : {
+         "requires" : {
+            "Class::Accessor" : 0,
+            "Coro" : 0,
+            "DateTime" : 0,
+            "DateTime::Format::Mail" : 0,
+            "DateTime::Format::Strptime" : 0,
+            "Email::Address" : 0,
+            "Email::MIME" : "1.862",
+            "Email::MIME::ContentType" : 0,
+            "Email::Simple" : "1.999",
+            "Encode::IMAPUTF7" : 0,
+            "List::MoreUtils" : 0,
+            "MIME::Base64" : 0,
+            "Net::SSLeay" : 0,
+            "Net::Server::Coro" : "0.3",
+            "Regexp::Common" : 0,
+            "Test::More" : 0,
+            "UNIVERSAL::require" : 0
+         }
+      },
+      "runtime" : {
+         "requires" : {
+            "IO::Select" : 0,
+            "IO::Socket" : 0,
+            "Parse::RecDescent" : 0,
+            "perl" : "5.008"
+         }
+      }
+   },
+   "release_status" : "stable",
+   "resources" : {
+      "repository" : {
+         "url" : "http://github.com/jettero/net--imap--simple"
+      }
+   },
+   "version" : "1.2024"
+}
