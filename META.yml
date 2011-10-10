@@ -43,4 +43,4 @@ requires:
   perl: 5.008
 resources:
   repository: http://github.com/jettero/net--imap--simple
-version: 1.2025
+version: 1.2026
