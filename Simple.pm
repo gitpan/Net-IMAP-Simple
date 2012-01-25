@@ -9,7 +9,7 @@ use IO::Socket;
 use IO::Select;
 use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.20271";
+our $VERSION = "1.2028";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -211,6 +211,18 @@ sub login {
         cmd     => [ LOGIN => qq[$user "$pass"] ],
         final   => sub { 1 },
         process => sub { },
+    );
+}
+
+sub separator {
+    my ( $self, ) = @_;
+    my $sep;
+
+        return $self->_process_cmd (
+        cmd     => [ LIST => qq["" ""]  ],
+        final => sub { $sep },
+        process => sub { (undef,undef,undef,$sep,undef) = split /\s/smx , $_[0];
+                        $sep =~ s/["]//g;  },
     );
 }
 
