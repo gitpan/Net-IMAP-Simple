@@ -1,54 +1,46 @@
 use strict;
-use warnings;
+no warnings;
 
 use Test;
 use Net::IMAP::Simple;
 
-plan tests => our $tests = 21;
+plan tests => our $tests = 16;
+
+our $imap;
+my $nm;
 
 sub run_tests {
-    open INFC, ">informal-imap-client-dump.log";
-    # we don't care very much if the above command fails
+    my $nm = $imap->select("testing") or die "imap error: " . $imap->errstr;
+    $nm = $imap->select("testing");
 
-    my $imap = Net::IMAP::Simple->new('localhost:19795', debug=>\*INFC, use_ssl=>1)
-        or die "\nconnect failed: $Net::IMAP::Simple::errstr\n";
-
-    ok( $imap->login(qw(working login)) )
-        or die "\nlogin failure: " . $imap->errstr . "\n";
-
-    my $nm = $imap->select("INBOX");
-    ok( defined $nm )
-        or die " failure($nm) selecting INBOX: " . $imap->errstr . "\n";
-
-    ok( $imap->put( INBOX => "Subject: test!\n\ntest!" ), $nm +1 )
-        or die " error putting test message: " . $imap->errstr . "\n";
+    $imap->put( testing => "Subject: test!\n\ntest!" ) or die "problem putting message: " . $imap->errstr;
 
     my @c = (
-        [ scalar $imap->select("fake"),  $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
-        [ scalar $imap->select("INBOX"), $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
-        [ scalar $imap->select("fake"),  $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
-        [ scalar $imap->select("INBOX"), $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
+        [ scalar $imap->select("fake"),    $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
+        [ scalar $imap->select("testing"), $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
+        [ scalar $imap->select("fake"),    $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
+        [ scalar $imap->select("testing"), $imap->current_box, $imap->unseen, $imap->last, $imap->recent ],
     );
 
-    ok( $c[$_][1], "INBOX" ) for 0 .. $#c;
+    ok( $c[$_][1], "testing" ) for 0 .. $#c;
 
     ok( $c[0][0], undef );
-    ok( $c[1][0], 1 );
+    ok( $c[1][0], $nm+1 );
     ok( $c[2][0], undef );
-    ok( $c[3][0], 1 );
-
-    ok( "@{ $c[$_] }[2,3,4]", "1 1 1" ) for 0 .. $#c;
+    ok( $c[3][0], $nm+1 );
+    ok( "@{ $c[$_] }[2,3,4]", "1 1 0" ) for 0 .. $#c;
 
     ## Test EXMAINE
 
-    ok( $imap->examine('INBOX') );
-    ok( not $imap->put( INBOX => "Subject: test!\n\ntest!" ) );
-    ok( $imap->errstr, qr/read.*only/ );
+    ok( $imap->examine('testing') );
+    # ok( not $imap->put( testing => "Subject: test!\n\ntest!" ) );
+    # ok( $imap->errstr, qr/read.*only/ );
+    # this worked in Net::IMAP::Server -- dovecot apparently lets you append after examine... heh
 
-    ok( $nm = $imap->select('INBOX') );
-    ok( $imap->put( INBOX => "Subject: test!\n\ntest!" ), 1 )
+    ok( $nm = $imap->select('testing') );
+    ok( $imap->put( testing => "Subject: test!\n\ntest!" ), 1 )
         or die " error putting test message: " . $imap->errstr . "\n";
-    ok( $imap->select('INBOX'), 2 );
+    ok( $imap->select('testing'), 2 );
 }
 
-do "t/test_server.pm";
+do "t/test_runner.pm";

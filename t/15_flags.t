@@ -1,38 +1,28 @@
-BEGIN { unless( $ENV{I_PROMISE_TO_TEST_SINGLE_THREADED} ) { print "1..1\nok 1\n"; exit 0; } }
-
 use strict;
-use warnings;
 
 use Test;
 use Net::IMAP::Simple;
 
 plan tests => our $tests =
-    ((my $puts = 5)+1)*5 -2 # the put lines
+    ((my $puts = 5)+1)*4 -2 # the put lines
     + 8 # some arbitrary flag tests on message 4
     + 8 # some msg_flags return values
     + 8 # grab flags for some nonexistnat messages, and for some existant ones
     ;
 
+our $imap;
+
 sub run_tests {
-    open INFC, ">>", "informal-imap-client-dump.log" or die $!;
+    my $nm = $imap->select('testing')
+        or die " failure selecting testing: " . $imap->errstr . "\n";
 
-    my $imap = Net::IMAP::Simple->new('localhost:19795', debug=>\*INFC, use_ssl=>1)
-        or die "\nconnect failed: $Net::IMAP::Simple::errstr\n";
-
-    $imap->login(qw(working login));
-    my $nm = $imap->select('INBOX')
-        or die " failure selecting INBOX: " . $imap->errstr . "\n";
-
-    ok( 0+$imap->last, 0 );
+    ok( 0+$imap->last,   0 );
     ok( 0+$imap->unseen, 0 );
-    ok( 0+$imap->recent, 0 );
 
     for(1 .. $puts) {
-        ok( $imap->put( INBOX => "Subject: test-$_\n\ntest-$_" ) );
+        ok( $imap->put( testing => "Subject: test-$_\n\ntest-$_" ) );
 
-        ok( 0+$imap->last, $_ );
-        ok( 0+$imap->recent, $_ );
-
+        ok( 0+$imap->last,   $_ );
         ok( 0+$imap->unseen, $_ );
 
         $imap->see($_);
@@ -64,13 +54,14 @@ sub run_tests {
     $imap->sub_flags( 4, qw(\Seen \Deleted \Answered) );
     $imap->add_flags( 5, qw(\Seen \Deleted \Answered) );
 
-    my @flags4 = $imap->msg_flags(4); ok( not $imap->waserr );
-    my $flags4 = $imap->msg_flags(4); ok( not $imap->waserr );
-    my @flags5 = $imap->msg_flags(5); ok( not $imap->waserr );
-    my $flags5 = $imap->msg_flags(5); ok( not $imap->waserr );
+    my $w;
+    my @flags4 = $imap->msg_flags(4); ok( not ($w=$imap->waserr) ); warn $imap->errstr if $w;
+    my $flags4 = $imap->msg_flags(4); ok( not ($w=$imap->waserr) ); warn $imap->errstr if $w;
+    my @flags5 = $imap->msg_flags(5); ok( not ($w=$imap->waserr) ); warn $imap->errstr if $w;
+    my $flags5 = $imap->msg_flags(5); ok( not ($w=$imap->waserr) ); warn $imap->errstr if $w;
 
-    ok( 0+@flags4, 1 ); # \Recent
-    ok( 0+@flags5, 4 ); # \Recent \Seen \Answered \Deleted
+    ok( 0+@flags4, 0 ); #
+    ok( 0+@flags5, 3 ); # \Seen \Answered \Deleted
     ok( defined $flags4 );
     ok( defined $flags5 );
 
@@ -87,4 +78,4 @@ sub run_tests {
     ok( defined $imap->deleted(5) );
 }
 
-do "t/test_server.pm";
+do "t/test_runner.pm";
