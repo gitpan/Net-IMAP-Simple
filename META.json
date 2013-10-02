@@ -4,7 +4,7 @@
       "Paul Miller <jettero@cpan.org>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.68, CPAN::Meta::Converter version 2.112621",
+   "generated_by" : "ExtUtils::MakeMaker version 6.78, CPAN::Meta::Converter version 2.120351",
    "keywords" : [
       "imap",
       "simple"
@@ -26,19 +26,19 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : 0
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "configure" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : 0
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "runtime" : {
          "requires" : {
-            "IO::Select" : 0,
-            "IO::Socket" : 0,
-            "Parse::RecDescent" : 0,
+            "IO::Select" : "0",
+            "IO::Socket" : "0",
+            "Parse::RecDescent" : "0",
             "perl" : "5.008"
          }
       }
@@ -49,5 +49,5 @@
          "url" : "http://github.com/jettero/net--imap--simple"
       }
    },
-   "version" : "1.2201"
+   "version" : "1.2202"
 }

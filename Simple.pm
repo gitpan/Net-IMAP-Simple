@@ -9,7 +9,7 @@ use IO::Socket;
 use IO::Select;
 use Net::IMAP::Simple::PipeSocket;
 
-our $VERSION = "1.2201";
+our $VERSION = "1.2202";
 
 BEGIN {
     # I'd really rather the pause/cpan indexers miss this "package"
@@ -1223,6 +1223,15 @@ sub _seterrstr {
     $self->_debug( caller, __LINE__, '_seterrstr', $err ) if $self->{debug};
 
     return;
+}
+
+sub debug {
+    my $this = shift;
+    if( @_ ) {
+        $this->{debug} = shift;
+    }
+
+    return $this->{debug};
 }
 
 sub _debug {
