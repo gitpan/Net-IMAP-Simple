@@ -1,3 +1,0 @@
-severity = 4
-verbose = 8
-exclude = ValuesAndExpressions::ProhibitConstantPragma Subroutines::RequireArgUnpacking Modules::RequireFilenameMatchesPackage Modules::ProhibitMultiplePackages TestingAndDebugging::ProhibitNoStrict
